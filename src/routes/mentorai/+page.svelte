@@ -1483,12 +1483,8 @@
 
 <div class="container">
   <div class="header-section">
-    <h1>MentorAI – Generation 1 (MVP) – Iteration 2</h1>
-    <div class="subtle">Multi-agent conversational mentoring system with active listening integration</div>
+    <h1>MentorAI</h1>
     <div class="toolbar">
-      <button class="secondary" on:click={() => (debugOpen = !debugOpen)}>
-        {debugOpen ? 'Hide' : 'Show'} Debug
-      </button>
       <button class="secondary" on:click={clearConversation}>Clear</button>
     </div>
   </div>

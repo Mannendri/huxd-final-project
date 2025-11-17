@@ -12,7 +12,8 @@
 
 import { Evaluator } from './Evaluator.js';
 import { Orchestrator } from './Orchestrator.js';
-import { updateConversationState } from './state.js';
+import { updateConversationState, rollbackLastAssistantMessage } from './state.js';
+import { AGENT_IDS, OBJECTIVES } from './types.js';
 
 /**
  * Handle a user turn through the full MentorAI pipeline
@@ -71,6 +72,103 @@ export async function handleUserTurn(user_message, state) {
     reply: finalReply,
     new_state: newState,
     plan,
+    agent_responses: agentResponses,
+    evaluator_output: evalOutput
+  };
+}
+
+/**
+ * Rewrite the last assistant response with a forced agent selection
+ *
+ * @param {string} selectedAgentId - Agent ID to use for rewrite
+ * @param {ConversationState} state - Current conversation state
+ * @returns {Promise<TurnResult>} - Turn result with rewritten reply and updated state
+ */
+export async function rewriteLastResponse(selectedAgentId, state) {
+  // Validate agent ID
+  const validAgentIds = Object.values(AGENT_IDS);
+  if (!validAgentIds.includes(selectedAgentId)) {
+    throw new Error(`Invalid agent ID: ${selectedAgentId}`);
+  }
+
+  // Rollback to before the last assistant message
+  const rolledBackState = rollbackLastAssistantMessage(state);
+
+  // Find the last user message (the one that triggered the response we're rewriting)
+  const lastUserMessage = rolledBackState.history
+    .filter(m => m.role === 'user')
+    .slice(-1)[0]?.content;
+
+  if (!lastUserMessage) {
+    throw new Error('No user message found to rewrite response for');
+  }
+
+  const evaluator = new Evaluator();
+  const orchestrator = new Orchestrator();
+
+  // Get evaluator output (use previous metrics if available)
+  const evalOutput = await evaluator.update({
+    user_message: lastUserMessage,
+    state: rolledBackState,
+    last_plan: rolledBackState.last_plan,
+    last_agent_outputs: rolledBackState.last_agent_outputs || [],
+    user_feedback: null
+  });
+
+  // Map agent ID to objective
+  const agentToObjective = {
+    [AGENT_IDS.TRUST]: OBJECTIVES.TRUST,
+    [AGENT_IDS.CHALLENGE]: OBJECTIVES.CHALLENGE,
+    [AGENT_IDS.REFLECTION]: OBJECTIVES.REFLECTION,
+    [AGENT_IDS.TRANSFER]: OBJECTIVES.TRANSFER
+  };
+
+  // Force the plan to use the selected agent
+  // We'll use the orchestrator's plan but override the agent selection
+  const originalPlan = await orchestrator.plan({
+    user_message: lastUserMessage,
+    state: rolledBackState,
+    humane_metrics: evalOutput.metrics,
+    agent_weight_adjustments: evalOutput.agent_weight_adjustments,
+    pacing_policy: evalOutput.pacing_policy
+  });
+
+  // Override plan with forced agent selection
+  const forcedPlan = {
+    ...originalPlan,
+    selected_agents: [selectedAgentId],
+    primary_objective: agentToObjective[selectedAgentId] || originalPlan.primary_objective,
+    reasoning: `User requested rewrite with ${selectedAgentId} agent`
+  };
+
+  // Call the selected agent
+  const agentResponses = await orchestrator.invokeAgents({
+    selected_agents: forcedPlan.selected_agents,
+    user_message: lastUserMessage,
+    state: rolledBackState,
+    plan: forcedPlan,
+    humane_metrics: evalOutput.metrics
+  });
+
+  // Fuse agent responses
+  const finalReply = await orchestrator.fuse(agentResponses, forcedPlan);
+
+  // Update state with rewritten response
+  const newState = updateConversationState(rolledBackState, {
+    user_message: null, // Don't add user message again
+    finalReply,
+    plan: forcedPlan,
+    agentResponses,
+    humane_metrics: evalOutput.metrics
+  });
+
+  // Store agent outputs
+  newState.last_agent_outputs = agentResponses;
+
+  return {
+    reply: finalReply,
+    new_state: newState,
+    plan: forcedPlan,
     agent_responses: agentResponses,
     evaluator_output: evalOutput
   };

@@ -68,6 +68,36 @@ export function updateConversationState(state, updates) {
 }
 
 /**
+ * Rollback state to before the last assistant message
+ * Removes the last assistant message and its associated state
+ * @param {ConversationState} state - Current state
+ * @returns {ConversationState} - Rolled back state
+ */
+export function rollbackLastAssistantMessage(state) {
+  const newHistory = [...state.history];
+
+  // Remove last assistant message if it exists
+  let removedAssistant = false;
+  for (let i = newHistory.length - 1; i >= 0; i--) {
+    if (newHistory[i].role === 'assistant') {
+      newHistory.splice(i, 1);
+      removedAssistant = true;
+      break;
+    }
+  }
+
+  if (!removedAssistant) {
+    // No assistant message to rollback
+    return state;
+  }
+
+  return {
+    ...state,
+    history: newHistory
+  };
+}
+
+/**
  * Convert conversation history to Gemini format
  * @param {Message[]} history - Message history
  * @returns {Array} - Gemini-formatted contents

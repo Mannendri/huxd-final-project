@@ -174,8 +174,8 @@
 </style>
 
 <div class="container">
-  <h1>MentorAI – Generation 1 (MVP)</h1>
-  <div class="subtle">Multi-agent conversational mentoring system</div>
+  <h1>MentorAI – Generation 1 (MVP) – Iteration 2</h1>
+  <div class="subtle">Multi-agent conversational mentoring system with active listening</div>
   <div class="toolbar" style="margin: 0.5rem 0 0.75rem 0;">
     <button class="secondary" on:click={() => (debugOpen = !debugOpen)}>
       {debugOpen ? 'Hide' : 'Show'} Debug

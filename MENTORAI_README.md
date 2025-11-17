@@ -1,6 +1,8 @@
-# MentorAI – Generation 1 (MVP)
+# MentorAI – Generation 1 (MVP) – Iteration 2
 
 Multi-agent conversational mentoring system built with SvelteKit and Google Gemini API.
+
+**Iteration 2**: Integrated active listening principles from "Active Listening and Reflective Responses" by JoAnne Yates.
 
 ## Overview
 

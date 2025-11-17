@@ -17,6 +17,8 @@ import { TrustTransparencyAgent } from '../agents/TrustTransparencyAgent.js';
 import { ChallengePacingAgent } from '../agents/ChallengePacingAgent.js';
 import { ReflectionCoachAgent } from '../agents/ReflectionCoachAgent.js';
 import { TransferToWorldAgent } from '../agents/TransferToWorldAgent.js';
+import { shouldUseActiveListening, determineResponseMode } from '../listening/activeListening.js';
+import { inferFeelings, extractPersonalPoints } from '../listening/emotionInference.js';
 
 const ORCHESTRATION_SCHEMA = {
   type: 'OBJECT',
@@ -96,16 +98,48 @@ export class Orchestrator {
         encourage_pause: pacing_policy.encourage_pause || false
       };
 
+      // Determine active listening mode
+      const useActiveListening = shouldUseActiveListening({
+        userMessage: user_message,
+        history: state.history,
+        humaneMetrics: humane_metrics
+      });
+
+      const listeningMode = useActiveListening
+        ? determineResponseMode({ history: state.history, humaneMetrics: humane_metrics, userMessage: user_message })
+        : 'directive';
+
+      // Infer feelings and extract personal points
+      const inferredFeelings = useActiveListening ? inferFeelings(user_message, state.history) : null;
+      const personalPoints = useActiveListening ? extractPersonalPoints(user_message) : [];
+
+      const listening_directives = {
+        mode: listeningMode,
+        use_active_listening: useActiveListening,
+        inferredFeelings: inferredFeelings,
+        personalPoints: personalPoints
+      };
+
       return {
         selected_agents,
         primary_objective,
         tone_directives,
         pacing_directives,
+        listening_directives,
         reasoning: parsed.reasoning || ''
       };
     } catch (err) {
       console.error('Orchestrator planning error:', err);
-      // Fallback plan
+      // Fallback plan with active listening
+      const useActiveListening = shouldUseActiveListening({
+        userMessage: user_message,
+        history: state.history,
+        humaneMetrics: humane_metrics
+      });
+      const listeningMode = useActiveListening ? 'reflective' : 'directive';
+      const inferredFeelings = useActiveListening ? inferFeelings(user_message, state.history) : null;
+      const personalPoints = useActiveListening ? extractPersonalPoints(user_message) : [];
+
       return {
         selected_agents: [AGENT_IDS.TRUST],
         primary_objective: OBJECTIVES.TRUST,
@@ -113,6 +147,12 @@ export class Orchestrator {
         pacing_directives: {
           target_length: 'medium',
           encourage_pause: false
+        },
+        listening_directives: {
+          mode: listeningMode,
+          use_active_listening: useActiveListening,
+          inferredFeelings: inferredFeelings,
+          personalPoints: personalPoints
         },
         reasoning: 'Planning failed, using default trust-focused plan'
       };
@@ -137,7 +177,8 @@ export class Orchestrator {
       objective: plan.primary_objective,
       tone_directives: plan.tone_directives,
       pacing_directives: plan.pacing_directives,
-      humane_metrics
+      humane_metrics,
+      listening_directives: plan.listening_directives
     };
 
     // Call agents in parallel (or sequentially if needed)

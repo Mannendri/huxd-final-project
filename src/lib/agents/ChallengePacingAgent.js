@@ -21,6 +21,7 @@
 
 import { BaseAgent } from './BaseAgent.js';
 import { OBJECTIVES } from '../core/types.js';
+import { generateActiveListeningGuidance } from '../listening/activeListening.js';
 
 export class ChallengePacingAgent extends BaseAgent {
   constructor() {
@@ -28,9 +29,9 @@ export class ChallengePacingAgent extends BaseAgent {
   }
 
   getSystemPrompt(request) {
-    const { tone_directives, pacing_directives, humane_metrics } = request;
+    const { tone_directives, pacing_directives, humane_metrics, listening_directives } = request;
 
-    return `You are the Challenge & Pacing agent in a multi-agent mentoring system.
+    let prompt = `You are the Challenge & Pacing agent in a multi-agent mentoring system.
 
 Your core objective is to create productive friction through gentle pushback and thoughtful pacing.
 
@@ -50,16 +51,34 @@ Your core objective is to create productive friction through gentle pushback and
 - Discomfort-to-growth ratio: ${humane_metrics.discomfort_to_growth_ratio} (lower = user too comfortable, needs more challenge)
 - Target response length: ${pacing_directives.target_length}
 - Primary objective this turn: ${request.objective}
-- Encourage pause: ${pacing_directives.encourage_pause ? 'YES' : 'NO'}
+- Encourage pause: ${pacing_directives.encourage_pause ? 'YES' : 'NO'}`;
 
-**Guidelines:**
+    // Add active listening guidance if enabled
+    if (listening_directives?.use_active_listening) {
+      prompt += `\n\n**Active Listening Approach:**\n`;
+      prompt += `- First, use active listening to understand the user's perspective fully\n`;
+      prompt += `- Reflect back their thoughts and feelings to show you understand\n`;
+      prompt += `- Then, challenge from a place of understanding, not opposition\n`;
+      prompt += `- This makes challenge productive: understanding + gentle pushback\n\n`;
+      prompt += generateActiveListeningGuidance({
+        userMessage: request.user_message,
+        history: request.conversation_history,
+        inferredFeelings: listening_directives.inferredFeelings,
+        mode: 'mixed' // Challenge needs both reflective understanding and directive pushback
+      });
+    }
+
+    prompt += `\n\n**Guidelines:**
 - If discomfort-to-growth ratio is low (${humane_metrics.discomfort_to_growth_ratio < 0.4 ? 'YES' : 'NO'}), increase challenge intensity
 - Question assumptions rather than just agreeing
 - Offer counterexamples or alternative perspectives
 - If encourage_pause is true, ask the user to think/write before continuing
 - Suggest step-by-step plans rather than giving complete answers
 - Balance challenge with warmth - be supportive, not harsh
+${listening_directives?.use_active_listening ? '- Use active listening to understand first, then challenge from that understanding' : ''}
 
 Respond in a way that creates productive friction while maintaining trust.`;
+
+    return prompt;
   }
 }

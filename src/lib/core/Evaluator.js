@@ -22,7 +22,8 @@ const EVALUATION_SCHEMA = {
       properties: {
         discomfort_to_growth_ratio: { type: 'NUMBER' },
         sycophancy_score: { type: 'NUMBER' },
-        dependency_risk_score: { type: 'NUMBER' }
+        dependency_risk_score: { type: 'NUMBER' },
+        listening_effectiveness: { type: 'NUMBER' }
       }
     },
     agent_weight_adjustments: {
@@ -95,7 +96,9 @@ export class Evaluator {
         ...parsed.metrics,
         // Preserve computed metrics that shouldn't be overridden
         avg_response_delay_ms: state.humane_metrics.avg_response_delay_ms,
-        user_rated_authenticity: user_feedback?.authenticity || state.humane_metrics.user_rated_authenticity
+        user_rated_authenticity: user_feedback?.authenticity || state.humane_metrics.user_rated_authenticity,
+        // Initialize listening_effectiveness if not present
+        listening_effectiveness: parsed.metrics?.listening_effectiveness ?? state.humane_metrics.listening_effectiveness ?? 0.5
       };
 
       return {
@@ -112,7 +115,10 @@ export class Evaluator {
       // Fallback to current state if evaluation fails
       console.error('Evaluator error:', err);
       return {
-        metrics: state.humane_metrics,
+        metrics: {
+          ...state.humane_metrics,
+          listening_effectiveness: state.humane_metrics.listening_effectiveness ?? 0.5
+        },
         agent_weight_adjustments: {},
         pacing_policy: {
           target_length: 'medium',
@@ -138,17 +144,22 @@ Your job is to track humane metrics and adjust agent weighting/pacing based on c
 - Discomfort-to-growth ratio: ${state.humane_metrics.discomfort_to_growth_ratio} (0-1, higher = more productive friction)
 - Sycophancy score: ${state.humane_metrics.sycophancy_score} (0-1, higher = we're agreeing too much)
 - Dependency risk score: ${state.humane_metrics.dependency_risk_score} (0-1, higher = user over-relying)
+- Listening effectiveness: ${state.humane_metrics.listening_effectiveness ?? 0.5} (0-1, higher = better active listening quality)
 
 **Last Turn Context:**
 ${last_plan ? `- Primary objective: ${last_plan.primary_objective}\n- Agents called: ${last_plan.selected_agents.join(', ')}` : '- First turn'}
 ${user_feedback ? `- User feedback: ${JSON.stringify(user_feedback)}` : ''}
 
 **Your Task:**
-1. Update the three metrics above based on:
+1. Update the four metrics above based on:
    - User's current message and tone
    - Whether we're being too agreeable (sycophancy)
    - Whether user seems stuck/over-dependent (dependency risk)
    - Whether there's productive friction (discomfort-to-growth)
+   - Whether we're effectively using active listening (listening_effectiveness):
+     * Higher if user seems understood/validated
+     * Lower if we're missing their feelings or perspective
+     * Consider if we're reflecting feelings, adopting their frame of reference, responding rather than leading
 
 2. Adjust agent weights (-1 to +1, where 0 = no change):
    - trust_transparency: Increase if sycophancy is high or user needs honesty

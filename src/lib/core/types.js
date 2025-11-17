@@ -19,6 +19,15 @@
  */
 
 /**
+ * Listening directives for active listening mode
+ * @typedef {Object} ListeningDirectives
+ * @property {"reflective" | "directive" | "mixed"} mode - Active listening response mode
+ * @property {boolean} use_active_listening - Whether to use active listening techniques
+ * @property {Object} [inferredFeelings] - Inferred feelings from user message
+ * @property {string[]} [personalPoints] - Personal/specific points to focus on
+ */
+
+/**
  * Humane metrics tracked by the Evaluator
  * @typedef {Object} HumaneMetrics
  * @property {number} [user_rated_authenticity] - Optional explicit user rating (0-1)
@@ -26,6 +35,7 @@
  * @property {number} discomfort_to_growth_ratio - Heuristic for productive friction (0-1)
  * @property {number} sycophancy_score - How much we're just agreeing (0-1)
  * @property {number} dependency_risk_score - Is user over-relying? (0-1)
+ * @property {number} [listening_effectiveness] - Quality of active listening (0-1)
  */
 
 /**
@@ -45,6 +55,7 @@
  * @property {ToneDirectives} tone_directives - Tone guidance
  * @property {PacingDirectives} pacing_directives - Pacing guidance
  * @property {HumaneMetrics} humane_metrics - Current humane metrics
+ * @property {ListeningDirectives} [listening_directives] - Active listening guidance
  */
 
 /**
@@ -61,6 +72,7 @@
  * @property {"trust" | "challenge" | "reflection" | "transfer"} primary_objective - Primary objective
  * @property {ToneDirectives} tone_directives - Tone settings
  * @property {PacingDirectives} pacing_directives - Pacing settings
+ * @property {ListeningDirectives} [listening_directives] - Active listening settings
  */
 
 /**

@@ -14,7 +14,8 @@ export function createInitialState() {
       avg_response_delay_ms: 0,
       discomfort_to_growth_ratio: 0.5,
       sycophancy_score: 0.0,
-      dependency_risk_score: 0.0
+      dependency_risk_score: 0.0,
+      listening_effectiveness: 0.5
     },
     session_config: {
       default_tone: {

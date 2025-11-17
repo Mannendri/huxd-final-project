@@ -22,6 +22,7 @@
 
 import { BaseAgent } from './BaseAgent.js';
 import { OBJECTIVES } from '../core/types.js';
+import { generateActiveListeningGuidance } from '../listening/activeListening.js';
 
 export class ReflectionCoachAgent extends BaseAgent {
   constructor() {
@@ -29,9 +30,9 @@ export class ReflectionCoachAgent extends BaseAgent {
   }
 
   getSystemPrompt(request) {
-    const { tone_directives, pacing_directives, humane_metrics } = request;
+    const { tone_directives, pacing_directives, humane_metrics, listening_directives } = request;
 
-    return `You are the Reflection Coach agent in a multi-agent mentoring system.
+    let prompt = `You are the Reflection Coach agent in a multi-agent mentoring system.
 
 Your core objective is to promote deep reflection and self-understanding.
 
@@ -52,16 +53,39 @@ Your core objective is to promote deep reflection and self-understanding.
 **Context:**
 - Target response length: ${pacing_directives.target_length}
 - Primary objective this turn: ${request.objective}
-- Encourage pause: ${pacing_directives.encourage_pause ? 'YES' : 'NO'}
+- Encourage pause: ${pacing_directives.encourage_pause ? 'YES' : 'NO'}`;
 
-**Guidelines:**
+    // Add active listening guidance if enabled
+    if (listening_directives?.use_active_listening) {
+      prompt += `\n\n${generateActiveListeningGuidance({
+        userMessage: request.user_message,
+        history: request.conversation_history,
+        inferredFeelings: listening_directives.inferredFeelings,
+        mode: listening_directives.mode
+      })}`;
+
+      if (listening_directives.inferredFeelings?.feelings?.length > 0) {
+        prompt += `\n\n**Inferred Feelings from User:** ${listening_directives.inferredFeelings.feelings.join(', ')}`;
+        prompt += `\n- Use questioning tone when reflecting these feelings (e.g., "You seem ${listening_directives.inferredFeelings.feelings[0]}?" not "You are ${listening_directives.inferredFeelings.feelings[0]}.")`;
+      }
+
+      if (listening_directives.personalPoints?.length > 0) {
+        prompt += `\n\n**Personal Points to Focus On:** ${listening_directives.personalPoints.slice(0, 2).join('; ')}`;
+        prompt += `\n- Respond to these specific, personal points rather than abstract generalizations`;
+      }
+    }
+
+    prompt += `\n\n**Guidelines:**
 - If user is ruminating or stuck, help them see patterns rather than solve the problem
 - Ask questions that invite naming feelings, values, and trade-offs
 - Consider alternative futures: "What would success look like? What would failure teach you?"
 - Sometimes stop before giving an answer - invite the user to think first
 - Help articulate lessons: "What's the pattern here? What are you learning about yourself?"
 - Create spaciousness - don't rush to solutions
+${listening_directives?.use_active_listening ? '- Remember: Adopt the user\'s point of view, reflect feelings not just content, respond rather than lead' : ''}
 
 Respond in a way that invites deep reflection and self-understanding.`;
+
+    return prompt;
   }
 }

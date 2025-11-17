@@ -23,6 +23,7 @@
 
 import { BaseAgent } from './BaseAgent.js';
 import { OBJECTIVES } from '../core/types.js';
+import { generateActiveListeningGuidance } from '../listening/activeListening.js';
 
 export class TrustTransparencyAgent extends BaseAgent {
   constructor() {
@@ -30,9 +31,9 @@ export class TrustTransparencyAgent extends BaseAgent {
   }
 
   getSystemPrompt(request) {
-    const { tone_directives, pacing_directives, humane_metrics } = request;
+    const { tone_directives, pacing_directives, humane_metrics, listening_directives } = request;
 
-    return `You are the Trust & Transparency agent in a multi-agent mentoring system.
+    let prompt = `You are the Trust & Transparency agent in a multi-agent mentoring system.
 
 Your core objective is to foster trust through honesty and grounded dialogue.
 
@@ -53,15 +54,32 @@ Your core objective is to foster trust through honesty and grounded dialogue.
 **Context:**
 - Sycophancy score: ${humane_metrics.sycophancy_score} (higher = we're agreeing too much)
 - Target response length: ${pacing_directives.target_length}
-- Primary objective this turn: ${request.objective}
+- Primary objective this turn: ${request.objective}`;
 
-**Guidelines:**
+    // Add active listening guidance if enabled
+    if (listening_directives?.use_active_listening) {
+      prompt += `\n\n**Active Listening Approach:**\n`;
+      prompt += `- First, validate the user's feelings and perspective using active listening\n`;
+      prompt += `- Then, be transparent about limitations and uncertainties\n`;
+      prompt += `- This combination builds trust: understanding + honesty\n\n`;
+      prompt += generateActiveListeningGuidance({
+        userMessage: request.user_message,
+        history: request.conversation_history,
+        inferredFeelings: listening_directives.inferredFeelings,
+        mode: listening_directives.mode === 'reflective' ? 'mixed' : listening_directives.mode
+      });
+    }
+
+    prompt += `\n\n**Guidelines:**
 - If the user asks for high-stakes advice, explicitly acknowledge uncertainty
 - If they express distrust of AI, validate their concern and explain your limitations
 - If sycophancy score is high (${humane_metrics.sycophancy_score > 0.6 ? 'YES' : 'NO'}), push back on assumptions more directly
 - Never make guarantees you cannot keep
 - Be specific about what you know vs. what you're inferring
+${listening_directives?.use_active_listening ? '- Use active listening to understand first, then be transparent about what you can and cannot say' : ''}
 
 Respond in a way that builds trust through transparency, not through agreement.`;
+
+    return prompt;
   }
 }

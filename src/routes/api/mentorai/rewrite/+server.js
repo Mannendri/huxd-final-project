@@ -52,6 +52,7 @@ export async function POST({ request }) {
       debug: {
         plan: {
           selected_agents: turnResult.plan.selected_agents,
+          selected_agent_id: turnResult.selected_agent_id, // Which agent response was actually shown
           primary_objective: turnResult.plan.primary_objective,
           tone_directives: turnResult.plan.tone_directives,
           pacing_directives: turnResult.plan.pacing_directives,
@@ -63,10 +64,12 @@ export async function POST({ request }) {
           pacing_policy: turnResult.evaluator_output.pacing_policy,
           reasoning: turnResult.evaluator_output.reasoning
         },
-        agent_responses: turnResult.agent_responses.map((r, i) => ({
-          agent: turnResult.plan.selected_agents[i],
+        agent_responses: turnResult.agent_responses.map((r) => ({
+          agent: r.agentId, // Now includes agentId in each response
           draft: r.text.substring(0, 200) + (r.text.length > 200 ? '...' : ''),
-          annotations: r.annotations
+          full_text: r.text, // Include full text for all personas
+          annotations: r.annotations,
+          is_selected: r.agentId === turnResult.selected_agent_id // Mark which was shown
         }))
       },
       state: turnResult.new_state // Return updated state for client to persist

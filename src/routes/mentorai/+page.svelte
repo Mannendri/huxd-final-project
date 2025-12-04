@@ -1595,10 +1595,22 @@
 
       {#if debugInfo.agent_responses && debugInfo.agent_responses.length > 0}
         <div class="debug-section">
-          <div><strong>Agent Responses:</strong></div>
+          <div style="margin-bottom: 0.5rem;">
+            <strong>All {debugInfo.agent_responses.length} Agent Responses Generated in Parallel:</strong>
+            <div style="font-size: 0.85em; color: #666; margin-top: 0.25rem;">
+              ✓ All personas responded, but only
+              <strong style="color: #4CAF50;">{debugInfo.plan?.selected_agent_id || 'one'}</strong>
+              is shown to the user
+            </div>
+          </div>
           {#each debugInfo.agent_responses as response}
-            <div style="margin-top: 0.25rem;">
-              <strong>{response.agent}:</strong> {response.draft}
+            <div style="margin-top: 0.5rem; padding: 0.5rem; background: {response.is_selected ? '#e8f5e9' : '#f5f5f5'}; border-radius: 4px; border-left: 3px solid {response.is_selected ? '#4CAF50' : '#ccc'};">
+              <strong style="color: {response.is_selected ? '#4CAF50' : '#333'};">
+                {response.agent} {response.is_selected ? '← SELECTED (shown to user)' : '(generated but hidden)'}
+              </strong>
+              <div style="margin-top: 0.25rem; font-size: 0.9em; color: #555;">
+                {response.full_text || response.draft}
+              </div>
             </div>
           {/each}
         </div>

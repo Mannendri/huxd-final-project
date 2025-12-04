@@ -160,15 +160,19 @@ export class Orchestrator {
   }
 
   /**
-   * Call selected agents and get their responses
+   * Call ALL agents in parallel and get their responses
+   *
+   * Note: We generate responses from all 4 agents simultaneously for speed,
+   * but only the selected agent's response will be shown to the user.
+   * All responses are stored internally for potential future use.
    *
    * @param {Object} params - Agent invocation parameters
-   * @param {string[]} params.selected_agents - Agent IDs to call
+   * @param {string[]} params.selected_agents - Agent IDs to call (for compatibility, but we call all)
    * @param {string} params.user_message - Current user message
    * @param {Object} params.state - Conversation state
    * @param {Object} params.plan - Orchestration plan
    * @param {Object} params.humane_metrics - Humane metrics
-   * @returns {Promise<AgentResponse[]>}
+   * @returns {Promise<Object>} - Object with all_responses array and selected_response
    */
   async invokeAgents({ selected_agents, user_message, state, plan, humane_metrics }) {
     const agentRequest = {
@@ -181,56 +185,60 @@ export class Orchestrator {
       listening_directives: plan.listening_directives
     };
 
-    // Call agents in parallel (or sequentially if needed)
-    const responses = await Promise.all(
-      selected_agents.map(async (agentId) => {
+    // Call ALL agents in parallel for speed, not just selected ones
+    const allAgentIds = Object.values(AGENT_IDS);
+
+    console.log(`[Orchestrator] Calling ALL ${allAgentIds.length} agents in parallel:`, allAgentIds);
+
+    const allResponses = await Promise.all(
+      allAgentIds.map(async (agentId) => {
         const agent = this.agents[agentId];
         if (!agent) {
           console.warn(`Agent ${agentId} not found`);
-          return { text: '', annotations: {} };
+          return { agentId, text: '', annotations: {} };
         }
-        return await agent.respond(agentRequest);
+        const response = await agent.respond(agentRequest);
+        console.log(`[Orchestrator] ✓ ${agentId} responded (${response.text?.length || 0} chars)`);
+        return { agentId, ...response };
       })
     );
 
-    return responses;
+    // Determine which response to use (first selected agent, or first in list if none match)
+    const selectedAgentId = selected_agents[0] || allAgentIds[0];
+    const selectedResponse = allResponses.find(r => r.agentId === selectedAgentId) || allResponses[0];
+
+    console.log(`[Orchestrator] Selected agent: ${selectedAgentId} (showing only this response to user)`);
+    console.log(`[Orchestrator] Generated ${allResponses.length} responses, but only displaying 1`);
+
+    return {
+      all_responses: allResponses,
+      selected_agent_id: selectedAgentId,
+      selected_response: selectedResponse
+    };
   }
 
   /**
-   * Fuse multiple agent responses into a single unified reply
+   * Extract the selected agent's response (no fusion needed since we only show one)
    *
-   * @param {AgentResponse[]} agentResponses - Individual agent responses
+   * @param {Object} agentResult - Result from invokeAgents with all_responses and selected_response
    * @param {OrchestrationPlan} plan - Orchestration plan
-   * @returns {Promise<string>} - Fused final response
+   * @returns {string} - Selected agent's response text
    */
-  async fuse(agentResponses, plan) {
-    if (agentResponses.length === 0) {
+  async fuse(agentResult, plan) {
+    // If old format (array), handle for backwards compatibility
+    if (Array.isArray(agentResult)) {
+      if (agentResult.length === 0) {
+        return "I'm here to help. Could you tell me more about what you're thinking?";
+      }
+      return agentResult[0].text || '';
+    }
+
+    // New format: extract selected response
+    if (!agentResult.selected_response || !agentResult.selected_response.text) {
       return "I'm here to help. Could you tell me more about what you're thinking?";
     }
 
-    if (agentResponses.length === 1) {
-      return agentResponses[0].text || '';
-    }
-
-    // Multiple agents: use LLM to fuse their responses
-    const fusionPrompt = this.buildFusionPrompt(agentResponses, plan);
-    const agentTexts = agentResponses.map((r, i) => `Agent ${i + 1}:\n${r.text}`).join('\n\n---\n\n');
-
-    const contents = [{
-      role: 'user',
-      parts: [{ text: agentTexts }]
-    }];
-
-    try {
-      const result = await geminiGenerate({
-        contents,
-        systemPrompt: fusionPrompt
-      });
-      return result.text || this.fallbackFusion(agentResponses);
-    } catch (err) {
-      console.error('Fusion error:', err);
-      return this.fallbackFusion(agentResponses);
-    }
+    return agentResult.selected_response.text;
   }
 
   /**

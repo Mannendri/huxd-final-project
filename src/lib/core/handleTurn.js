@@ -44,8 +44,8 @@ export async function handleUserTurn(user_message, state) {
     pacing_policy: evalOutput.pacing_policy
   });
 
-  // 3) Call selected specialized agents
-  const agentResponses = await orchestrator.invokeAgents({
+  // 3) Call ALL specialized agents in parallel (returns all responses + selected one)
+  const agentResult = await orchestrator.invokeAgents({
     selected_agents: plan.selected_agents,
     user_message,
     state,
@@ -53,26 +53,31 @@ export async function handleUserTurn(user_message, state) {
     humane_metrics: evalOutput.metrics
   });
 
-  // 4) Orchestrator fuses agentResponses into a single reply
-  const finalReply = await orchestrator.fuse(agentResponses, plan);
+  // 4) Extract the selected agent's response (no fusion needed)
+  const finalReply = await orchestrator.fuse(agentResult, plan);
 
   // 5) Update state and send info back to Evaluator for next turn
   const newState = updateConversationState(state, {
     user_message,
     finalReply,
     plan,
-    agentResponses,
+    agentResponses: agentResult.selected_response, // Only store selected response in history
     humane_metrics: evalOutput.metrics
   });
 
-  // Store agent outputs for next evaluator update
-  newState.last_agent_outputs = agentResponses;
+  // Store all agent outputs internally for potential future use
+  newState.last_agent_outputs = agentResult.all_responses;
+  newState.all_agent_responses = agentResult.all_responses; // Keep all responses available
 
   return {
     reply: finalReply,
     new_state: newState,
-    plan,
-    agent_responses: agentResponses,
+    plan: {
+      ...plan,
+      selected_agent_id: agentResult.selected_agent_id // Add which agent was actually shown
+    },
+    agent_responses: agentResult.all_responses, // Return all for debugging
+    selected_agent_id: agentResult.selected_agent_id,
     evaluator_output: evalOutput
   };
 }
@@ -141,8 +146,8 @@ export async function rewriteLastResponse(selectedAgentId, state) {
     reasoning: `User requested rewrite with ${selectedAgentId} agent`
   };
 
-  // Call the selected agent
-  const agentResponses = await orchestrator.invokeAgents({
+  // Call ALL agents (for consistency and speed), but select the forced one
+  const agentResult = await orchestrator.invokeAgents({
     selected_agents: forcedPlan.selected_agents,
     user_message: lastUserMessage,
     state: rolledBackState,
@@ -150,26 +155,31 @@ export async function rewriteLastResponse(selectedAgentId, state) {
     humane_metrics: evalOutput.metrics
   });
 
-  // Fuse agent responses
-  const finalReply = await orchestrator.fuse(agentResponses, forcedPlan);
+  // Extract the selected (forced) agent's response
+  const finalReply = await orchestrator.fuse(agentResult, forcedPlan);
 
   // Update state with rewritten response
   const newState = updateConversationState(rolledBackState, {
     user_message: null, // Don't add user message again
     finalReply,
     plan: forcedPlan,
-    agentResponses,
+    agentResponses: agentResult.selected_response, // Only store selected in history
     humane_metrics: evalOutput.metrics
   });
 
-  // Store agent outputs
-  newState.last_agent_outputs = agentResponses;
+  // Store all agent outputs internally
+  newState.last_agent_outputs = agentResult.all_responses;
+  newState.all_agent_responses = agentResult.all_responses;
 
   return {
     reply: finalReply,
     new_state: newState,
-    plan: forcedPlan,
-    agent_responses: agentResponses,
+    plan: {
+      ...forcedPlan,
+      selected_agent_id: agentResult.selected_agent_id
+    },
+    agent_responses: agentResult.all_responses, // Return all for debugging
+    selected_agent_id: agentResult.selected_agent_id,
     evaluator_output: evalOutput
   };
 }

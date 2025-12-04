@@ -48,12 +48,17 @@ export async function POST({ request }) {
     // Handle the turn through the full pipeline
     const turnResult = await handleUserTurn(lastUserMessage, state);
 
+    console.log(`[API] Generated ${turnResult.agent_responses?.length || 0} agent responses`);
+    console.log(`[API] Showing only selected agent: ${turnResult.selected_agent_id}`);
+    console.log(`[API] User will see ONLY the selected response in chat, but all ${turnResult.agent_responses?.length || 0} are in debug`);
+
     // Return response with debug info
     return json({
       assistantMessage: turnResult.reply,
       debug: {
         plan: {
           selected_agents: turnResult.plan.selected_agents,
+          selected_agent_id: turnResult.selected_agent_id, // Which agent response was actually shown
           primary_objective: turnResult.plan.primary_objective,
           tone_directives: turnResult.plan.tone_directives,
           pacing_directives: turnResult.plan.pacing_directives,
@@ -65,10 +70,12 @@ export async function POST({ request }) {
           pacing_policy: turnResult.evaluator_output.pacing_policy,
           reasoning: turnResult.evaluator_output.reasoning
         },
-        agent_responses: turnResult.agent_responses.map((r, i) => ({
-          agent: turnResult.plan.selected_agents[i],
+        agent_responses: turnResult.agent_responses.map((r) => ({
+          agent: r.agentId, // Now includes agentId in each response
           draft: r.text.substring(0, 200) + (r.text.length > 200 ? '...' : ''),
-          annotations: r.annotations
+          full_text: r.text, // Include full text for all personas
+          annotations: r.annotations,
+          is_selected: r.agentId === turnResult.selected_agent_id // Mark which was shown
         }))
       },
       state: turnResult.new_state // Return updated state for client to persist

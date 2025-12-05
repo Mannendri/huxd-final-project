@@ -213,7 +213,7 @@
           const messageIndex = messages.length - 1;
           messageAgentMap[messageIndex] = agentId;
           setTimeout(() => {
-            startTypewriterEffect(messageIndex, data.assistantMessage, 15, true);
+            startTypewriterEffect(messageIndex, data.assistantMessage, 15, false);
           }, 100);
         }
 
@@ -343,36 +343,25 @@
     isRewriting = false; // Start with arrow pointing at old agent
     rewindLoadingProgress = 0; // Reset loading bar
 
-    // Random loading duration between 18-24 seconds
-    rewindLoadingDuration = Math.random() * 6000 + 18000; // 18000-24000ms
+    // Fixed 3 second duration for smooth animation
+    rewindLoadingDuration = 3000; // 3000ms = 3 seconds
     rewindLoadingStartTime = Date.now();
 
-    // Trigger rewind animation with agent info
-    let loadingInterval = null;
-    let finishInterval = null;
+    // Show overlay FIRST before anything else
     if (lastAssistantIndex !== undefined) {
       rewindAnimationActive = true;
 
-      // Start loading bar animation
-      loadingInterval = setInterval(() => {
-        const elapsed = Date.now() - rewindLoadingStartTime;
-        const progress = Math.min((elapsed / rewindLoadingDuration) * 100, 100);
-        rewindLoadingProgress = progress;
-
-        if (progress >= 100) {
-          clearInterval(loadingInterval);
-          loadingInterval = null;
-        }
-      }, 16); // Update ~60fps
-
-      // Start arrow rotation after overlay appears (small delay for smooth transition)
-      // The arrow will rotate over the loading duration
+      // Wait for overlay to fade in (300ms) before starting arrow rotation
       setTimeout(() => {
         isRewriting = true; // This triggers the arrow rotation to new agent
       }, 300);
     } else {
+      rewindAnimationActive = true;
       isRewriting = true;
     }
+
+    // Store response data - will update message after animation
+    let responseData = null;
 
     try {
       console.log('Rewriting with agent:', selectedAgentId);
@@ -392,20 +381,30 @@
       const data = await res.json();
       console.log('Rewrite response:', data);
 
-      // Don't wait - let the arrow continue rotating until we're ready to show the result
-      // The overlay will fade out when we update the message
-
       if (!res.ok || data?.error) {
         errorMsg = data?.error || data?.details || 'Rewrite failed';
         console.error('Rewrite error:', data);
-        rewindAnimationActive = false;
-        isRewriting = false;
-        rewindLoadingProgress = 0;
-        return;
+        responseData = null; // Mark as error
+      } else {
+        // Store response data - will update message after animation
+        responseData = data;
+      }
+    } catch (err) {
+      errorMsg = 'Network error: ' + err.message;
+      console.error('Rewrite exception:', err);
+      responseData = null;
+    } finally {
+      // Wait for animation to complete (minimum 3 seconds)
+      const elapsed = Date.now() - rewindLoadingStartTime;
+      const remainingTime = Math.max(0, rewindLoadingDuration - elapsed);
+
+      if (remainingTime > 0) {
+        // Wait for minimum duration (3 seconds total)
+        await new Promise(resolve => setTimeout(resolve, remainingTime));
       }
 
-      if (data.assistantMessage) {
-        // Replace the last assistant message
+      // Now update the message (overlay is still showing)
+      if (responseData?.assistantMessage) {
         const newMessages = [...messages];
         const lastAssistantIndex = newMessages.map((m, i) => ({ m, i }))
           .filter(({ m }) => m.role === 'assistant')
@@ -422,7 +421,7 @@
 
           const newMessage = {
             role: 'assistant',
-            content: data.assistantMessage,
+            content: responseData.assistantMessage,
             agentId: selectedAgentId
           };
           newMessages[lastAssistantIndex] = newMessage;
@@ -430,73 +429,52 @@
           messageAgentMap[lastAssistantIndex] = selectedAgentId;
           messages = newMessages;
 
+          debugInfo = responseData.debug || null;
+          conversationState = responseData.state || null;
+
+          // Persist state
+          if (conversationState) {
+            localStorage.setItem('mentorai_state', JSON.stringify(conversationState));
+          }
+
           // Start typewriter effect for rewritten message (no blurry placeholder)
           setTimeout(() => {
-            startRealTextTyping(lastAssistantIndex, data.assistantMessage, 15);
-          }, 100); // Small delay after rewind animation
+            startRealTextTyping(lastAssistantIndex, responseData.assistantMessage, 15);
+          }, 100);
         } else {
           // Fallback: just add it
-          const newMessage = { role: 'assistant', content: data.assistantMessage, agentId: selectedAgentId };
+          const newMessage = { role: 'assistant', content: responseData.assistantMessage, agentId: selectedAgentId };
           messages = [...messages, newMessage];
           const messageIndex = messages.length - 1;
           messageAgentMap[messageIndex] = selectedAgentId;
-          // Start typewriter effect with placeholder
+
+          debugInfo = responseData.debug || null;
+          conversationState = responseData.state || null;
+
+          // Persist state
+          if (conversationState) {
+            localStorage.setItem('mentorai_state', JSON.stringify(conversationState));
+          }
+
+          // Start typewriter effect
           setTimeout(() => {
-            startTypewriterEffect(messageIndex, data.assistantMessage, 15, true);
+            startTypewriterEffect(messageIndex, responseData.assistantMessage, 15, false);
           }, 100);
         }
-
-        debugInfo = data.debug || null;
-        conversationState = data.state || null;
-
-        // Persist state
-        if (conversationState) {
-          localStorage.setItem('mentorai_state', JSON.stringify(conversationState));
-        }
-      } else {
+      } else if (responseData && !responseData.assistantMessage) {
         errorMsg = 'No assistant message in response';
-        console.error('No assistantMessage in response:', data);
-      }
-    } catch (err) {
-      errorMsg = 'Network error: ' + err.message;
-      console.error('Rewrite exception:', err);
-    } finally {
-      // Clean up loading interval if still running
-      if (loadingInterval) {
-        clearInterval(loadingInterval);
-        loadingInterval = null;
+        console.error('No assistantMessage in response:', responseData);
       }
 
-      // Wait for loading bar to complete before hiding overlay
-      const elapsed = Date.now() - rewindLoadingStartTime;
-      const remainingTime = Math.max(0, rewindLoadingDuration - elapsed);
-
-      if (remainingTime > 0) {
-        // Continue loading bar until it reaches 100%
-        finishInterval = setInterval(() => {
-          const currentElapsed = Date.now() - rewindLoadingStartTime;
-          const progress = Math.min((currentElapsed / rewindLoadingDuration) * 100, 100);
-          rewindLoadingProgress = progress;
-
-          if (progress >= 100) {
-            clearInterval(finishInterval);
-            finishInterval = null;
-          }
-        }, 16);
-
-        // Wait for loading to complete
-        await new Promise(resolve => setTimeout(resolve, remainingTime + 200));
-        if (finishInterval) {
-          clearInterval(finishInterval);
-          finishInterval = null;
-        }
-      } else {
-        // Ensure loading bar is at 100%
-        rewindLoadingProgress = 100;
-        await new Promise(resolve => setTimeout(resolve, 200));
+      // Fade out overlay (triggered by setting isRewriting = false)
+      // Wait a tiny bit for message to render (if we have one), then fade out
+      if (responseData?.assistantMessage) {
+        await new Promise(resolve => setTimeout(resolve, 50));
       }
-
       isRewriting = false;
+
+      // Wait for fade-out animation to complete (500ms)
+      await new Promise(resolve => setTimeout(resolve, 500));
       rewindAnimationActive = false;
       rewindOldAgent = null;
       rewindNewAgent = null;
@@ -646,38 +624,14 @@
   }
 
   // Typewriter effect for messages
-  function startTypewriterEffect(messageIndex, fullText, speed = 20, usePlaceholder = true) {
+  function startTypewriterEffect(messageIndex, fullText, speed = 20, usePlaceholder = false) {
     // Clear any existing timer for this message
     if (messageTimers[messageIndex]) {
       clearInterval(messageTimers[messageIndex]);
     }
 
-    // Start with blurry placeholder if requested
-    if (usePlaceholder && fullText.length > 0) {
-      const placeholderLength = Math.max(fullText.length, 100);
-      placeholderMessages[messageIndex] = generateBlurryPlaceholder(placeholderLength);
-
-      // Type out placeholder first (faster, blurry)
-      let placeholderIndex = 0;
-      const placeholderChars = placeholderMessages[messageIndex].split('');
-
-      const placeholderTimer = setInterval(() => {
-        if (placeholderIndex < placeholderChars.length) {
-          // Trigger reactivity
-          typingMessages = { ...typingMessages, [messageIndex]: placeholderChars.slice(0, placeholderIndex + 1).join('') };
-          placeholderIndex++;
-        } else {
-          clearInterval(placeholderTimer);
-          // Now switch to real text
-          startRealTextTyping(messageIndex, fullText, speed);
-        }
-      }, speed * 0.5);
-
-      messageTimers[messageIndex] = placeholderTimer;
-    } else {
-      // Direct to real text
-      startRealTextTyping(messageIndex, fullText, speed);
-    }
+    // Direct to real text (no placeholder)
+    startRealTextTyping(messageIndex, fullText, speed);
   }
 
   // Type out the real text
@@ -1026,22 +980,6 @@
     animation: rewindFadeIn 0.3s ease-out forwards;
   }
 
-  .rewind-loading-bar-container {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 64px; /* 4x thicker than before (was 16px, originally 4px) */
-    background: rgba(255, 255, 255, 0.1);
-    overflow: hidden;
-  }
-
-  .rewind-loading-bar {
-    height: 100%;
-    background: linear-gradient(90deg, #3b82f6, #8b5cf6, #ec4899);
-    transition: width 0.1s linear;
-    box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
-  }
 
   @keyframes rewindFadeIn {
     0% {
@@ -1098,23 +1036,6 @@
     align-items: center;
     justify-content: center;
     position: relative;
-  }
-
-  .rewind-spinner {
-    position: absolute;
-    top: 32px; /* Center of loading bar (64px / 2 = 32px) */
-    left: 50%;
-    margin-left: -1.25rem; /* Center horizontally (half of font-size) */
-    margin-top: -1.25rem; /* Center vertically (half of font-size) */
-    font-size: 2.5rem;
-    color: rgba(255, 255, 255, 0.6);
-    animation: spin 2s linear infinite;
-    z-index: 1000;
-    width: 2.5rem;
-    height: 2.5rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
   }
 
   @keyframes spin {
@@ -1680,14 +1601,6 @@
 
 {#if rewindAnimationActive}
   <div class="rewind-overlay" class:fade-out={!isRewriting && rewindAnimationActive}>
-    <!-- Loading bar at the top -->
-    <div class="rewind-loading-bar-container">
-      <div class="rewind-loading-bar" style="width: {rewindLoadingProgress}%"></div>
-    </div>
-
-    <!-- Spinning loader at the top -->
-    <div class="rewind-spinner">⟳</div>
-
     <div class="rewind-content">
       <div class="rewind-agent">
         <div class="rewind-agent-name" class:active={!isRewriting}>

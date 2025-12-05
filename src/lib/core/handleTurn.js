@@ -96,6 +96,76 @@ export async function rewriteLastResponse(selectedAgentId, state) {
     throw new Error(`Invalid agent ID: ${selectedAgentId}`);
   }
 
+  // Check if we have cached responses from the previous turn
+  // If all 4 agents were generated in parallel, we can just use the cached response!
+  const cachedResponses = state.all_agent_responses || state.last_agent_outputs || [];
+
+  if (cachedResponses.length > 0) {
+    // Find the response for the selected agent in the cached responses
+    const cachedResponse = cachedResponses.find(r => r.agentId === selectedAgentId);
+
+    if (cachedResponse && cachedResponse.text) {
+      console.log(`[Rewrite] Using cached response for ${selectedAgentId} (instant rewrite!)`);
+
+      // Rollback to before the last assistant message
+      const rolledBackState = rollbackLastAssistantMessage(state);
+
+      // Map agent ID to objective
+      const agentToObjective = {
+        [AGENT_IDS.TRUST]: OBJECTIVES.TRUST,
+        [AGENT_IDS.CHALLENGE]: OBJECTIVES.CHALLENGE,
+        [AGENT_IDS.REFLECTION]: OBJECTIVES.REFLECTION,
+        [AGENT_IDS.TRANSFER]: OBJECTIVES.TRANSFER
+      };
+
+      // Create a minimal plan for the selected agent
+      const forcedPlan = {
+        selected_agents: [selectedAgentId],
+        primary_objective: agentToObjective[selectedAgentId] || OBJECTIVES.TRUST,
+        tone_directives: state.last_plan?.tone_directives || { warmth: 0.7, intellectual: 0.6, grounded: 0.8 },
+        pacing_directives: state.last_plan?.pacing_directives || { target_length: 'medium', encourage_pause: false },
+        listening_directives: state.last_plan?.listening_directives || {},
+        reasoning: `User requested rewrite with ${selectedAgentId} agent (using cached response)`
+      };
+
+      // Use the cached response directly - no need to regenerate!
+      const finalReply = cachedResponse.text;
+
+      // Update state with rewritten response
+      const newState = updateConversationState(rolledBackState, {
+        user_message: null, // Don't add user message again
+        finalReply,
+        plan: forcedPlan,
+        agentResponses: cachedResponse,
+        humane_metrics: state.humane_metrics || {}
+      });
+
+      // Keep all cached responses available
+      newState.last_agent_outputs = cachedResponses;
+      newState.all_agent_responses = cachedResponses;
+
+      return {
+        reply: finalReply,
+        new_state: newState,
+        plan: {
+          ...forcedPlan,
+          selected_agent_id: selectedAgentId
+        },
+        agent_responses: cachedResponses,
+        selected_agent_id: selectedAgentId,
+        evaluator_output: {
+          metrics: state.humane_metrics || {},
+          agent_weight_adjustments: {},
+          pacing_policy: { target_length: 'medium', encourage_pause: false },
+          reasoning: 'Using cached response - no re-evaluation needed'
+        }
+      };
+    }
+  }
+
+  // Fallback: If no cached response available, regenerate (original behavior)
+  console.log(`[Rewrite] No cached response found for ${selectedAgentId}, regenerating...`);
+
   // Rollback to before the last assistant message
   const rolledBackState = rollbackLastAssistantMessage(state);
 

@@ -26,6 +26,30 @@
   let placeholderMessages = {}; // Map message index to placeholder text (blurry gibberish)
   let placeholderStageTimers = {}; // Timers for cycling placeholder stages
   let placeholderStages = {}; // Current stage for each placeholder
+  let currentPlaceholderIndex = 0; // For rotating placeholder text
+  let showSuggestions = true; // Show suggestions when no messages
+
+  // Reflection prompts for new users - statements to share, not questions to ask
+  const reflectionPrompts = [
+    "I'm struggling with a decision and need honest perspective...",
+    "I want to examine an assumption I've been holding...",
+    "I feel intellectually stuck and need someone to push back...",
+    "There's a pattern in my thinking I want to understand better...",
+    "I believe something but haven't fully examined it...",
+    "I feel stuck in my growth and need clarity...",
+    "I've been avoiding feedback about something important...",
+    "I hold a belief that might be limiting me..."
+  ];
+
+  // Rotating placeholder text suggestions
+  const placeholderSuggestions = [
+    "Share what's on your mind—I'll help you think through it...",
+    "Tell me about something you're wrestling with...",
+    "What assumption or belief would you like to examine?",
+    "Describe a decision, pattern, or challenge you're facing...",
+    "What do you want clarity on but haven't fully explored?",
+    "What would you like to reflect on or get honest feedback about?"
+  ];
 
   // Agent definitions with friendly names - Dark Frutiger Aero colors
   const AGENTS = {
@@ -97,15 +121,33 @@
             }
           }
         }
+        // Hide suggestions if there are existing messages
+        if (messages.length > 0) {
+          showSuggestions = false;
+        }
       } catch (e) {
         console.error('Failed to load saved state:', e);
       }
     }
+
+    // Rotate placeholder text every 4 seconds
+    const placeholderInterval = setInterval(() => {
+      if (messages.length === 0 && !input) {
+        currentPlaceholderIndex = (currentPlaceholderIndex + 1) % placeholderSuggestions.length;
+      }
+    }, 4000);
+
+    return () => clearInterval(placeholderInterval);
   });
 
   async function send() {
     const content = input.trim();
     if (!content) return;
+
+    // Hide suggestions once conversation starts
+    if (showSuggestions) {
+      showSuggestions = false;
+    }
 
     // Add the user message immediately
     messages = [...messages, { role: 'user', content }];
@@ -293,7 +335,19 @@
     debugInfo = null;
     conversationState = null;
     rewindModalOpen = false;
+    showSuggestions = true; // Show suggestions again when cleared
     localStorage.removeItem('mentorai_state');
+  }
+
+  function useSuggestion(prompt) {
+    input = prompt;
+    // Focus the input after a brief delay
+    setTimeout(() => {
+      const inputEl = document.querySelector('.frutiger-input');
+      if (inputEl) {
+        inputEl.focus();
+      }
+    }, 100);
   }
 
   function openRewindModal() {
@@ -1391,6 +1445,76 @@
     margin-bottom: 0.5rem;
   }
 
+  .suggestions-container {
+    margin-bottom: 1rem;
+    padding: 1rem;
+    background: var(--card);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 2px solid var(--border);
+    border-radius: 20px;
+    box-shadow: var(--shadow-soft);
+    flex-shrink: 0;
+    animation: fadeInUp 0.4s ease-out;
+  }
+
+  @keyframes fadeInUp {
+    0% {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .suggestions-label {
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-bottom: 0.75rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .suggestions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.75rem;
+  }
+
+  .suggestion-chip {
+    padding: 0.75rem 1rem;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(107, 70, 193, 0.1) 100%);
+    border: 2px solid rgba(139, 92, 246, 0.3);
+    border-radius: 16px;
+    color: var(--text);
+    font-family: 'Comfortaa', sans-serif;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: left;
+    line-height: 1.4;
+    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.15);
+  }
+
+  .suggestion-chip:hover:not(:disabled) {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.25) 0%, rgba(107, 70, 193, 0.2) 100%);
+    border-color: var(--primary);
+    box-shadow: 0 4px 16px rgba(139, 92, 246, 0.3);
+    transform: translateY(-2px);
+  }
+
+  .suggestion-chip:active:not(:disabled) {
+    transform: translateY(0);
+  }
+
+  .suggestion-chip:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
   @media (max-width: 640px) {
     .bubble { max-width: 92%; }
     .toolbar { gap: 0.5rem; }
@@ -1398,7 +1522,13 @@
     .agent-grid {
       grid-template-columns: 1fr;
     }
+    .suggestions-grid {
+      grid-template-columns: 1fr;
+    }
     h1 { font-size: 1.25rem; }
+    .suggestions-container {
+      padding: 0.75rem;
+    }
   }
 </style>
 
@@ -1464,10 +1594,27 @@
     {/if}
   </div>
 
+  {#if showSuggestions && messages.length === 0}
+    <div class="suggestions-container">
+      <div class="suggestions-label">Things to reflect on:</div>
+      <div class="suggestions-grid">
+        {#each reflectionPrompts.slice(0, 4) as prompt}
+          <button
+            class="suggestion-chip"
+            on:click={() => useSuggestion(prompt)}
+            disabled={isLoading || isRewriting}
+          >
+            {prompt}
+          </button>
+        {/each}
+      </div>
+    </div>
+  {/if}
+
   <div class="row input-row" style="margin-top: 0; flex-shrink: 0;">
     <input
       type="text"
-      placeholder="Type a message..."
+      placeholder={placeholderSuggestions[currentPlaceholderIndex]}
       bind:value={input}
       on:keydown={(e) => e.key === 'Enter' && send()}
       class="frutiger-input"

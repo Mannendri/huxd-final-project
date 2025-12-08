@@ -852,6 +852,7 @@
   .bubble.user {
     background: linear-gradient(135deg, rgba(220, 38, 38, 0.3) 0%, rgba(239, 68, 68, 0.25) 100%);
     border: 2px solid rgba(220, 38, 38, 0.5);
+    border-left: 5px solid var(--red);
     margin-left: auto;
     font-family: 'Comfortaa', sans-serif;
     font-size: 1rem;

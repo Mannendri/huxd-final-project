@@ -1191,7 +1191,7 @@
 
   .send-button {
     padding: 0.9rem 1.8rem;
-    border: none;
+    border: 2px solid var(--primary);
     border-radius: 20px;
     background: linear-gradient(135deg, var(--primary) 0%, var(--dark-purple) 100%);
     color: white;
@@ -1199,20 +1199,29 @@
     font-weight: 600;
     font-family: 'Comfortaa', sans-serif;
     font-size: 1rem;
+    line-height: 1.2;
     box-shadow: 0 4px 16px rgba(139, 92, 246, 0.4);
     transition: all 0.3s ease;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    white-space: nowrap;
+    min-width: 140px;
+    height: 48px;
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .send-button:hover:not(:disabled) {
     background: linear-gradient(135deg, var(--primary-600) 0%, var(--primary) 100%);
     box-shadow: 0 6px 20px rgba(139, 92, 246, 0.5);
-    transform: translateY(-2px);
+    transform: translateY(-2px) scale(1.02);
+    border-color: var(--light-purple);
   }
 
   .send-button:active:not(:disabled) {
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 
   .send-button:disabled {
@@ -1221,7 +1230,7 @@
   }
 
   .rewind-button {
-    padding: 0.9rem 1.5rem;
+    padding: 0.9rem 1.8rem;
     border: 2px solid var(--red);
     border-radius: 20px;
     background: linear-gradient(135deg, rgba(220, 38, 38, 0.8) 0%, rgba(239, 68, 68, 0.7) 100%);
@@ -1230,11 +1239,18 @@
     font-weight: 600;
     font-family: 'Comfortaa', sans-serif;
     font-size: 1rem;
+    line-height: 1.2;
     box-shadow: 0 4px 16px rgba(220, 38, 38, 0.4);
     transition: all 0.3s ease;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     white-space: nowrap;
+    min-width: 140px;
+    height: 48px;
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .rewind-button:hover:not(:disabled) {
@@ -1249,7 +1265,7 @@
   }
 
   .rewind-button:disabled {
-    opacity: 0.4;
+    opacity: 0.5;
     cursor: not-allowed;
   }
 
@@ -1631,7 +1647,7 @@
     >
       ⏪ Rewind
     </button>
-    <button class="send-button" on:click={send} disabled={isLoading || isRewriting}>Send</button>
+    <button class="send-button" on:click={send} disabled={isLoading || isRewriting}>→ Send</button>
   </div>
 </div>
 

@@ -26,6 +26,7 @@
   let placeholderMessages = {}; // Map message index to placeholder text (blurry gibberish)
   let placeholderStageTimers = {}; // Timers for cycling placeholder stages
   let placeholderStages = {}; // Current stage for each placeholder
+  let placeholderInterval = null; // Timer for rotating placeholder text
   let currentPlaceholderIndex = 0; // For rotating placeholder text
   let showSuggestions = true; // Show suggestions when no messages
 
@@ -131,13 +132,11 @@
     }
 
     // Rotate placeholder text every 4 seconds
-    const placeholderInterval = setInterval(() => {
+    placeholderInterval = setInterval(() => {
       if (messages.length === 0 && !input) {
         currentPlaceholderIndex = (currentPlaceholderIndex + 1) % placeholderSuggestions.length;
       }
     }, 4000);
-
-    return () => clearInterval(placeholderInterval);
   });
 
   async function send() {
@@ -736,6 +735,10 @@
   onDestroy(() => {
     Object.values(messageTimers).forEach(timer => clearInterval(timer));
     Object.values(placeholderStageTimers).forEach(timer => clearInterval(timer));
+    if (placeholderInterval) {
+      clearInterval(placeholderInterval);
+      placeholderInterval = null;
+    }
   });
 </script>
 

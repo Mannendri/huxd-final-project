@@ -29,6 +29,9 @@
   let placeholderInterval = null; // Timer for rotating placeholder text
   let currentPlaceholderIndex = 0; // For rotating placeholder text
   let showSuggestions = true; // Show suggestions when no messages
+  let loadingReflectionPrompt = ''; // Reflective prompt shown during loading
+  let loadingReflectionIndex = 0; // Index for rotating reflection prompts
+  let reflectionInterval = null; // Timer for rotating reflection prompts during loading
 
   // Reflection prompts for new users - statements to share, not questions to ask
   const reflectionPrompts = [
@@ -40,6 +43,18 @@
     "I feel stuck in my growth and need clarity...",
     "I've been avoiding feedback about something important...",
     "I hold a belief that might be limiting me..."
+  ];
+
+  // Reflective prompts shown during loading to keep users engaged
+  const loadingReflectionPrompts = [
+    "While I think, what's one assumption you're making about this situation?",
+    "Take a moment: what would you tell a friend facing this?",
+    "What's the question behind your question?",
+    "What would change if you looked at this from a different angle?",
+    "What do you already know but haven't fully acknowledged?",
+    "If you were completely honest with yourself, what would you say?",
+    "What would you want to understand better if you had more clarity?",
+    "What's one thing you're avoiding thinking about here?"
   ];
 
   // Rotating placeholder text suggestions
@@ -157,6 +172,26 @@
     errorMsg = '';
     debugInfo = null;
 
+    // Start showing reflective prompts during loading
+    loadingReflectionIndex = Math.floor(Math.random() * loadingReflectionPrompts.length);
+    loadingReflectionPrompt = loadingReflectionPrompts[loadingReflectionIndex];
+
+    // Clear any existing reflection interval
+    if (reflectionInterval) {
+      clearInterval(reflectionInterval);
+    }
+
+    // Rotate reflection prompts every 3 seconds while loading
+    reflectionInterval = setInterval(() => {
+      if (isLoading) {
+        loadingReflectionIndex = (loadingReflectionIndex + 1) % loadingReflectionPrompts.length;
+        loadingReflectionPrompt = loadingReflectionPrompts[loadingReflectionIndex];
+      } else {
+        clearInterval(reflectionInterval);
+        reflectionInterval = null;
+      }
+    }, 3000);
+
     try {
       // Send history without placeholder messages
       const historyForAPI = messages.filter(m => !m.isPlaceholder).map(m => ({
@@ -194,6 +229,11 @@
           messages = messages.filter((m, i) => i !== placeholderIndex);
         }
         isLoading = false;
+        loadingReflectionPrompt = '';
+        if (reflectionInterval) {
+          clearInterval(reflectionInterval);
+          reflectionInterval = null;
+        }
         return;
       }
 
@@ -317,6 +357,11 @@
       errorMsg = 'Network error: ' + err.message;
     } finally {
       isLoading = false;
+      loadingReflectionPrompt = '';
+      if (reflectionInterval) {
+        clearInterval(reflectionInterval);
+        reflectionInterval = null;
+      }
     }
   }
 
@@ -739,31 +784,40 @@
       clearInterval(placeholderInterval);
       placeholderInterval = null;
     }
+    if (reflectionInterval) {
+      clearInterval(reflectionInterval);
+      reflectionInterval = null;
+    }
   });
 </script>
 
 <style>
   :global(:root) {
-    /* Dark Frutiger Aero Color Palette - Purple, Red, Black */
-    --dark-purple: #6B46C1;
-    --purple: #8B5CF6;
-    --light-purple: #A78BFA;
-    --dark-red: #DC2626;
-    --red: #EF4444;
-    --light-red: #F87171;
-    --black: #0A0A0A;
-    --dark-gray: #1A1A1A;
-    --gray: #2D2D2D;
-    --bg: linear-gradient(135deg, #0A0A0A 0%, #1A0A1A 25%, #2D0A2D 50%, #1A0A0A 75%, #0A0A0A 100%);
-    --card: rgba(26, 26, 26, 0.85);
-    --card-muted: rgba(26, 26, 26, 0.6);
-    --border: rgba(139, 92, 246, 0.4);
-    --text: #E5E5E5;
-    --muted: #A3A3A3;
-    --primary: #8B5CF6;
-    --primary-600: #6B46C1;
-    --shadow-soft: 0 8px 32px rgba(139, 92, 246, 0.2);
-    --shadow-medium: 0 12px 40px rgba(220, 38, 38, 0.3);
+    /* Warm, Inviting Color Palette - Cream, Beige, Soft Pastels */
+    --warm-cream: #FEF9F3;
+    --soft-beige: #F5EDE0;
+    --warm-white: #FFFBF7;
+    --light-cream: #FAF6F0;
+    --warm-gray: #E8E0D5;
+    --soft-purple: #B8A9D9;
+    --warm-purple: #9B7ED8;
+    --soft-pink: #E8B8C8;
+    --warm-pink: #D99BA8;
+    --soft-coral: #F4C2A1;
+    --warm-coral: #E8A87C;
+    --text-dark: #3A3429;
+    --text-medium: #5A5245;
+    --text-light: #7A7265;
+    --muted: #9A9285;
+    --primary: #9B7ED8;
+    --primary-600: #7B5EB8;
+    --bg: linear-gradient(135deg, #FEF9F3 0%, #F5EDE0 25%, #FAF6F0 50%, #F5EDE0 75%, #FEF9F3 100%);
+    --card: rgba(255, 251, 247, 0.95);
+    --card-muted: rgba(255, 251, 247, 0.7);
+    --border: rgba(155, 126, 216, 0.3);
+    --text: #3A3429;
+    --shadow-soft: 0 8px 32px rgba(155, 126, 216, 0.15);
+    --shadow-medium: 0 12px 40px rgba(232, 184, 200, 0.2);
   }
 
   :global(html, body) {
@@ -771,10 +825,10 @@
     margin: 0;
     padding: 0;
     background:
-      radial-gradient(circle at 20% 30%, rgba(220, 38, 38, 0.2) 0%, transparent 50%),
-      radial-gradient(circle at 80% 70%, rgba(139, 92, 246, 0.3) 0%, transparent 50%),
-      radial-gradient(circle at 50% 50%, rgba(107, 70, 193, 0.15) 0%, transparent 70%),
-      linear-gradient(135deg, #0A0A0A 0%, #1A0A1A 25%, #2D0A2D 50%, #1A0A0A 75%, #0A0A0A 100%);
+      radial-gradient(circle at 20% 30%, rgba(232, 184, 200, 0.15) 0%, transparent 50%),
+      radial-gradient(circle at 80% 70%, rgba(155, 126, 216, 0.2) 0%, transparent 50%),
+      radial-gradient(circle at 50% 50%, rgba(244, 194, 161, 0.1) 0%, transparent 70%),
+      linear-gradient(135deg, #FEF9F3 0%, #F5EDE0 25%, #FAF6F0 50%, #F5EDE0 75%, #FEF9F3 100%);
     background-attachment: fixed;
     color: var(--text);
     font-family: 'Comfortaa', 'Segoe UI', sans-serif;
@@ -850,24 +904,25 @@
   }
 
   .bubble.user {
-    background: linear-gradient(135deg, rgba(220, 38, 38, 0.3) 0%, rgba(239, 68, 68, 0.25) 100%);
-    border: 2px solid rgba(220, 38, 38, 0.5);
-    border-left: 5px solid var(--red);
+    background: linear-gradient(135deg, rgba(232, 184, 200, 0.4) 0%, rgba(217, 155, 168, 0.3) 100%);
+    border: 2px solid rgba(217, 155, 168, 0.5);
+    border-left: 5px solid var(--warm-pink);
     margin-left: auto;
     font-family: 'Comfortaa', sans-serif;
     font-size: 1rem;
     font-weight: 400;
-    color: #FFE5E5;
+    color: var(--text-dark);
   }
 
   .bubble.assistant {
-    background: linear-gradient(135deg, rgba(26, 26, 26, 0.95) 0%, rgba(107, 70, 193, 0.2) 100%);
-    border: 2px solid rgba(139, 92, 246, 0.4);
+    background: linear-gradient(135deg, rgba(255, 251, 247, 0.98) 0%, rgba(245, 237, 224, 0.95) 100%);
+    border: 2px solid rgba(155, 126, 216, 0.3);
     margin-right: auto;
-    font-family: 'Comfortaa', sans-serif;
-    font-size: 1rem;
-    font-weight: 400;
-    color: var(--text);
+    font-family: 'Caveat', 'Comfortaa', sans-serif;
+    font-size: 1.15rem;
+    font-weight: 500;
+    color: var(--text-dark);
+    box-shadow: 0 2px 12px rgba(155, 126, 216, 0.15);
   }
 
   /* Polaroid reveal effect */
@@ -971,30 +1026,30 @@
   }
   .bubble:hover { outline: 2px solid transparent; box-shadow: 0 1px 0 rgba(2,6,23,0.04); }
 
-  /* Agent color coding - Dark Frutiger Aero style */
+  /* Agent color coding - Warm, inviting style */
   .bubble.agent-trust {
-    border-left: 5px solid var(--purple);
-    background: linear-gradient(135deg, rgba(26, 26, 26, 0.95) 0%, rgba(139, 92, 246, 0.3) 100%);
-    border-color: rgba(139, 92, 246, 0.5);
-    color: var(--text);
+    border-left: 5px solid var(--warm-purple);
+    background: linear-gradient(135deg, rgba(255, 251, 247, 0.98) 0%, rgba(184, 169, 217, 0.2) 100%);
+    border-color: rgba(155, 126, 216, 0.4);
+    color: var(--text-dark);
   }
   .bubble.agent-challenge {
-    border-left: 5px solid var(--red);
-    background: linear-gradient(135deg, rgba(26, 26, 26, 0.95) 0%, rgba(220, 38, 38, 0.25) 100%);
-    border-color: rgba(220, 38, 38, 0.5);
-    color: #FFE5E5;
+    border-left: 5px solid var(--warm-coral);
+    background: linear-gradient(135deg, rgba(255, 251, 247, 0.98) 0%, rgba(244, 194, 161, 0.25) 100%);
+    border-color: rgba(232, 168, 124, 0.4);
+    color: var(--text-dark);
   }
   .bubble.agent-reflection {
-    border-left: 5px solid var(--light-purple);
-    background: linear-gradient(135deg, rgba(26, 26, 26, 0.95) 0%, rgba(167, 139, 250, 0.25) 100%);
-    border-color: rgba(167, 139, 250, 0.5);
-    color: var(--text);
+    border-left: 5px solid var(--soft-purple);
+    background: linear-gradient(135deg, rgba(255, 251, 247, 0.98) 0%, rgba(184, 169, 217, 0.2) 100%);
+    border-color: rgba(184, 169, 217, 0.4);
+    color: var(--text-dark);
   }
   .bubble.agent-transfer {
-    border-left: 5px solid var(--light-red);
-    background: linear-gradient(135deg, rgba(26, 26, 26, 0.95) 0%, rgba(248, 113, 113, 0.25) 100%);
-    border-color: rgba(248, 113, 113, 0.5);
-    color: #FFE5E5;
+    border-left: 5px solid var(--warm-pink);
+    background: linear-gradient(135deg, rgba(255, 251, 247, 0.98) 0%, rgba(232, 184, 200, 0.2) 100%);
+    border-color: rgba(217, 155, 168, 0.4);
+    color: var(--text-dark);
   }
 
   /* Rewind animation */
@@ -1194,14 +1249,14 @@
     padding: 0.9rem 1.8rem;
     border: 2px solid var(--primary);
     border-radius: 20px;
-    background: linear-gradient(135deg, var(--primary) 0%, var(--dark-purple) 100%);
+    background: linear-gradient(135deg, var(--warm-purple) 0%, var(--primary-600) 100%);
     color: white;
     cursor: pointer;
     font-weight: 600;
     font-family: 'Comfortaa', sans-serif;
     font-size: 1rem;
     line-height: 1.2;
-    box-shadow: 0 4px 16px rgba(139, 92, 246, 0.4);
+    box-shadow: 0 4px 16px rgba(155, 126, 216, 0.3);
     transition: all 0.3s ease;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -1215,10 +1270,10 @@
   }
 
   .send-button:hover:not(:disabled) {
-    background: linear-gradient(135deg, var(--primary-600) 0%, var(--primary) 100%);
-    box-shadow: 0 6px 20px rgba(139, 92, 246, 0.5);
+    background: linear-gradient(135deg, var(--primary-600) 0%, var(--warm-purple) 100%);
+    box-shadow: 0 6px 20px rgba(155, 126, 216, 0.4);
     transform: translateY(-2px) scale(1.02);
-    border-color: var(--light-purple);
+    border-color: var(--soft-purple);
   }
 
   .send-button:active:not(:disabled) {
@@ -1232,16 +1287,16 @@
 
   .rewind-button {
     padding: 0.9rem 1.8rem;
-    border: 2px solid var(--red);
+    border: 2px solid var(--warm-coral);
     border-radius: 20px;
-    background: linear-gradient(135deg, rgba(220, 38, 38, 0.8) 0%, rgba(239, 68, 68, 0.7) 100%);
-    color: #FFE5E5;
+    background: linear-gradient(135deg, rgba(232, 168, 124, 0.9) 0%, rgba(244, 194, 161, 0.8) 100%);
+    color: var(--text-dark);
     cursor: pointer;
     font-weight: 600;
     font-family: 'Comfortaa', sans-serif;
     font-size: 1rem;
     line-height: 1.2;
-    box-shadow: 0 4px 16px rgba(220, 38, 38, 0.4);
+    box-shadow: 0 4px 16px rgba(232, 168, 124, 0.3);
     transition: all 0.3s ease;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -1255,10 +1310,10 @@
   }
 
   .rewind-button:hover:not(:disabled) {
-    background: linear-gradient(135deg, rgba(220, 38, 38, 1) 0%, rgba(239, 68, 68, 0.9) 100%);
-    box-shadow: 0 6px 20px rgba(220, 38, 38, 0.5);
+    background: linear-gradient(135deg, rgba(244, 194, 161, 1) 0%, rgba(232, 168, 124, 0.95) 100%);
+    box-shadow: 0 6px 20px rgba(232, 168, 124, 0.4);
     transform: translateY(-2px) scale(1.02);
-    border-color: var(--light-red);
+    border-color: var(--warm-coral);
   }
 
   .rewind-button:active:not(:disabled) {
@@ -1305,9 +1360,9 @@
   .debug-section:first-child { margin-top: 0; padding-top: 0; border-top: none; }
 
   .error {
-    background: linear-gradient(135deg, rgba(220, 38, 38, 0.3) 0%, rgba(239, 68, 68, 0.25) 100%);
-    color: #FFE5E5;
-    border: 2px solid var(--red);
+    background: linear-gradient(135deg, rgba(232, 184, 200, 0.4) 0%, rgba(217, 155, 168, 0.3) 100%);
+    color: var(--text-dark);
+    border: 2px solid var(--warm-pink);
     padding: 1rem 1.25rem;
     border-radius: 20px;
     margin: 0.5rem 0 0.75rem 0;
@@ -1325,8 +1380,8 @@
     animation: blink 1.4s infinite both;
     box-shadow: 0 2px 4px rgba(139, 92, 246, 0.3);
   }
-  .dot:nth-child(2) { animation-delay: .2s; background: var(--purple); }
-  .dot:nth-child(3) { animation-delay: .4s; background: var(--red); }
+  .dot:nth-child(2) { animation-delay: .2s; background: var(--warm-purple); }
+  .dot:nth-child(3) { animation-delay: .4s; background: var(--warm-coral); }
   @keyframes blink { 0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); } 40% { opacity: 1; transform: scale(1.1); } }
 
   .modal-overlay {
@@ -1535,6 +1590,41 @@
     cursor: not-allowed;
   }
 
+  /* Loading reflection prompt - appears during loading to keep users engaged */
+  .loading-reflection {
+    margin: 1rem 0;
+    padding: 1.25rem 1.5rem;
+    background: linear-gradient(135deg, rgba(255, 251, 247, 0.95) 0%, rgba(245, 237, 224, 0.9) 100%);
+    border: 2px solid rgba(155, 126, 216, 0.3);
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    box-shadow: 0 4px 16px rgba(155, 126, 216, 0.15);
+    animation: fadeInUp 0.4s ease-out;
+    flex-shrink: 0;
+  }
+
+  .loading-reflection-icon {
+    font-size: 1.5rem;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  .loading-reflection-text {
+    flex: 1;
+    font-family: 'Caveat', 'Comfortaa', sans-serif;
+    font-size: 1.1rem;
+    color: var(--text-dark);
+    font-weight: 500;
+    line-height: 1.5;
+    font-style: italic;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.7; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.1); }
+  }
+
   @media (max-width: 640px) {
     .bubble { max-width: 92%; }
     .toolbar { gap: 0.5rem; }
@@ -1628,6 +1718,13 @@
           </button>
         {/each}
       </div>
+    </div>
+  {/if}
+
+  {#if isLoading && loadingReflectionPrompt}
+    <div class="loading-reflection">
+      <div class="loading-reflection-icon">💭</div>
+      <div class="loading-reflection-text">{loadingReflectionPrompt}</div>
     </div>
   {/if}
 

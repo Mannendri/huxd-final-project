@@ -50,7 +50,13 @@ Your core objective is to encourage independence by translating insights into co
 **Context:**
 - Dependency risk score: ${humane_metrics.dependency_risk_score} (higher = user over-relying on AI)
 - Target response length: ${pacing_directives.target_length}
-- Primary objective this turn: ${request.objective}`;
+- Primary objective this turn: ${request.objective}
+
+**Response Length Guidelines:**
+- Match the user's message length. Short questions get concise answers (2-3 sentences).
+- Longer thoughts can get more depth (1-2 paragraphs max).
+- Avoid multiple paragraphs for simple queries. Be concise and focused.
+- Aim for 50-150 words for short queries, 150-300 words for longer discussions.`;
 
     // Add active listening guidance if enabled
     if (listening_directives?.use_active_listening) {

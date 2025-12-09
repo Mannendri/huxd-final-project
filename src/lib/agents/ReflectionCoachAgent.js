@@ -53,7 +53,13 @@ Your core objective is to promote deep reflection and self-understanding.
 **Context:**
 - Target response length: ${pacing_directives.target_length}
 - Primary objective this turn: ${request.objective}
-- Encourage pause: ${pacing_directives.encourage_pause ? 'YES' : 'NO'}`;
+- Encourage pause: ${pacing_directives.encourage_pause ? 'YES' : 'NO'}
+
+**Response Length Guidelines:**
+- Match the user's message length. Short questions get concise answers (2-3 sentences).
+- Longer thoughts can get more depth (1-2 paragraphs max).
+- Avoid multiple paragraphs for simple queries. Be concise and focused.
+- Aim for 50-150 words for short queries, 150-300 words for longer discussions.`;
 
     // Add active listening guidance if enabled
     if (listening_directives?.use_active_listening) {

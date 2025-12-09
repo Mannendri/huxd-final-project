@@ -32,6 +32,7 @@
   let loadingReflectionPrompt = ''; // Reflective prompt shown during loading
   let loadingReflectionIndex = 0; // Index for rotating reflection prompts
   let reflectionInterval = null; // Timer for rotating reflection prompts during loading
+  let rewindProgressInterval = null; // Timer for rewind loading bar progress
 
   // Reflection prompts for new users - statements to share, not questions to ask
   const reflectionPrompts = [
@@ -273,10 +274,10 @@
           delete placeholderStages[placeholderIndex];
           delete typingMessages[placeholderIndex];
 
-          // Replace with real message - use array update to trigger reactivity
+          // Replace with real message - set content to empty initially for typewriter effect
           messages = messages.map((m, idx) => {
             if (idx === placeholderIndex) {
-              return { role: 'assistant', content: data.assistantMessage, agentId };
+              return { role: 'assistant', content: '', agentId }; // Start empty for typewriter
             }
             return m;
           });
@@ -285,16 +286,16 @@
           // Force reactivity update
           messages = messages;
 
-          // Start typewriter effect immediately
+          // Start typewriter effect immediately - this will populate the content
           startRealTextTyping(placeholderIndex, data.assistantMessage, 15);
         } else {
-          // Fallback: add new message
-          const newMessage = { role: 'assistant', content: data.assistantMessage, agentId };
+          // Fallback: add new message with empty content for typewriter
+          const newMessage = { role: 'assistant', content: '', agentId }; // Start empty
           messages = [...messages, newMessage];
           const messageIndex = messages.length - 1;
           messageAgentMap[messageIndex] = agentId;
           setTimeout(() => {
-            startTypewriterEffect(messageIndex, data.assistantMessage, 15, false);
+            startRealTextTyping(messageIndex, data.assistantMessage, 15);
           }, 100);
         }
 
@@ -334,8 +335,14 @@
               };
             });
 
-            // Only sync if the message count matches (to avoid overwriting during typewriter)
-            if (syncedMessages.length === messages.length || syncedMessages.length === messages.length - 1) {
+            // Only sync if the message count matches AND we're not currently typing
+            // Check if we're typing the last message
+            const lastMessageIndex = messages.length - 1;
+            const isTypingLastMessage = lastMessageIndex >= 0 &&
+              typingMessages[lastMessageIndex] !== undefined &&
+              typingMessages[lastMessageIndex] !== messages[lastMessageIndex]?.content;
+
+            if ((syncedMessages.length === messages.length || syncedMessages.length === messages.length - 1) && !isTypingLastMessage) {
               messages = syncedMessages;
 
               // Update agent map for all assistant messages
@@ -441,22 +448,26 @@
     isRewriting = false; // Start with arrow pointing at old agent
     rewindLoadingProgress = 0; // Reset loading bar
 
-    // Fixed 3 second duration for smooth animation
-    rewindLoadingDuration = 3000; // 3000ms = 3 seconds
+    // Fixed 2 second duration for smooth animation
+    rewindLoadingDuration = 2000; // 2000ms = 2 seconds
     rewindLoadingStartTime = Date.now();
+    rewindAnimationActive = true;
+    isRewriting = true;
 
-    // Show overlay FIRST before anything else
-    if (lastAssistantIndex !== undefined) {
-      rewindAnimationActive = true;
-
-      // Wait for overlay to fade in (300ms) before starting arrow rotation
-      setTimeout(() => {
-        isRewriting = true; // This triggers the arrow rotation to new agent
-      }, 300);
-    } else {
-      rewindAnimationActive = true;
-      isRewriting = true;
+    // Animate loading bar progress
+    const startProgress = Date.now();
+    if (rewindProgressInterval) {
+      clearInterval(rewindProgressInterval);
     }
+    rewindProgressInterval = setInterval(() => {
+      const elapsed = Date.now() - startProgress;
+      rewindLoadingProgress = Math.min(100, (elapsed / rewindLoadingDuration) * 100);
+
+      if (rewindLoadingProgress >= 100) {
+        clearInterval(rewindProgressInterval);
+        rewindProgressInterval = null;
+      }
+    }, 16); // ~60fps
 
     // Store response data - will update message after animation
     let responseData = null;
@@ -492,14 +503,17 @@
       console.error('Rewrite exception:', err);
       responseData = null;
     } finally {
-      // Wait for animation to complete (minimum 3 seconds)
+      // Wait for animation to complete (minimum 2 seconds)
       const elapsed = Date.now() - rewindLoadingStartTime;
       const remainingTime = Math.max(0, rewindLoadingDuration - elapsed);
 
       if (remainingTime > 0) {
-        // Wait for minimum duration (3 seconds total)
+        // Wait for minimum duration (2 seconds total)
         await new Promise(resolve => setTimeout(resolve, remainingTime));
       }
+
+      // Ensure loading bar is at 100%
+      rewindLoadingProgress = 100;
 
       // Now update the message (overlay is still showing)
       if (responseData?.assistantMessage) {
@@ -517,15 +531,23 @@
           delete typingMessages[lastAssistantIndex];
           delete placeholderMessages[lastAssistantIndex];
 
+          // Set content to empty initially for typewriter effect
           const newMessage = {
             role: 'assistant',
-            content: responseData.assistantMessage,
+            content: '', // Start empty for typewriter
             agentId: selectedAgentId
           };
           newMessages[lastAssistantIndex] = newMessage;
           // Update agent map
           messageAgentMap[lastAssistantIndex] = selectedAgentId;
           messages = newMessages;
+
+          // Clear any existing typing state to prevent conflicts
+          if (messageTimers[lastAssistantIndex]) {
+            clearInterval(messageTimers[lastAssistantIndex]);
+            delete messageTimers[lastAssistantIndex];
+          }
+          delete typingMessages[lastAssistantIndex];
 
           debugInfo = responseData.debug || null;
           conversationState = responseData.state || null;
@@ -540,8 +562,8 @@
             startRealTextTyping(lastAssistantIndex, responseData.assistantMessage, 15);
           }, 100);
         } else {
-          // Fallback: just add it
-          const newMessage = { role: 'assistant', content: responseData.assistantMessage, agentId: selectedAgentId };
+          // Fallback: just add it with empty content for typewriter
+          const newMessage = { role: 'assistant', content: '', agentId: selectedAgentId };
           messages = [...messages, newMessage];
           const messageIndex = messages.length - 1;
           messageAgentMap[messageIndex] = selectedAgentId;
@@ -556,7 +578,7 @@
 
           // Start typewriter effect
           setTimeout(() => {
-            startTypewriterEffect(messageIndex, responseData.assistantMessage, 15, false);
+            startRealTextTyping(messageIndex, responseData.assistantMessage, 15);
           }, 100);
         }
       } else if (responseData && !responseData.assistantMessage) {
@@ -580,6 +602,10 @@
       rewindNewAgentId = null;
       rewindLoadingProgress = 0;
       rewindLoadingStartTime = 0;
+      if (rewindProgressInterval) {
+        clearInterval(rewindProgressInterval);
+        rewindProgressInterval = null;
+      }
     }
   }
 
@@ -787,6 +813,10 @@
     if (reflectionInterval) {
       clearInterval(reflectionInterval);
       reflectionInterval = null;
+    }
+    if (rewindProgressInterval) {
+      clearInterval(rewindProgressInterval);
+      rewindProgressInterval = null;
     }
   });
 </script>
@@ -1105,12 +1135,27 @@
 
   .rewind-content {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 3rem;
-    max-width: 800px;
+    gap: 1.5rem;
+    max-width: 500px;
     width: 100%;
     padding: 2rem;
-    padding-top: 10rem; /* Lower everything down */
+  }
+
+  .rewind-loading-bar-container {
+    width: 100%;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .rewind-loading-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--warm-purple), var(--warm-coral));
+    border-radius: 2px;
+    transition: width 0.1s linear;
   }
 
   .rewind-agent {
@@ -1520,9 +1565,76 @@
     margin-bottom: 0.5rem;
   }
 
+  /* Welcome message for first-time users */
+  .welcome-container {
+    margin-bottom: 1.5rem;
+    flex-shrink: 0;
+    animation: fadeInUp 0.5s ease-out;
+  }
+
+  .welcome-message {
+    text-align: center;
+    padding: 2rem 1.5rem;
+    background: linear-gradient(135deg, rgba(255, 251, 247, 0.98) 0%, rgba(245, 237, 224, 0.95) 100%);
+    border: 2px solid rgba(155, 126, 216, 0.3);
+    border-radius: 24px;
+    box-shadow: 0 4px 20px rgba(155, 126, 216, 0.15);
+    margin-bottom: 1.5rem;
+  }
+
+  .welcome-icon {
+    font-size: 3rem;
+    margin-bottom: 0.75rem;
+    animation: wave 2s ease-in-out infinite;
+  }
+
+  @keyframes wave {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(20deg); }
+    75% { transform: rotate(-20deg); }
+  }
+
+  .welcome-title {
+    font-family: 'Caveat', 'Comfortaa', sans-serif;
+    font-size: 2rem;
+    font-weight: 600;
+    color: var(--text-dark);
+    margin: 0 0 0.75rem 0;
+  }
+
+  .welcome-description {
+    font-family: 'Comfortaa', sans-serif;
+    font-size: 1rem;
+    color: var(--text-medium);
+    line-height: 1.6;
+    margin: 0 0 1.5rem 0;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .privacy-notice {
+    font-family: 'Comfortaa', sans-serif;
+    font-size: 0.85rem;
+    color: var(--text-light);
+    line-height: 1.5;
+    margin-top: 1.5rem;
+    padding: 1rem;
+    background: rgba(155, 126, 216, 0.1);
+    border: 1px solid rgba(155, 126, 216, 0.2);
+    border-radius: 12px;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .privacy-notice strong {
+    color: var(--text-dark);
+  }
+
   .suggestions-container {
     margin-bottom: 1rem;
-    padding: 1rem;
+    padding: 1.5rem;
     background: var(--card);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
@@ -1530,7 +1642,7 @@
     border-radius: 20px;
     box-shadow: var(--shadow-soft);
     flex-shrink: 0;
-    animation: fadeInUp 0.4s ease-out;
+    animation: fadeInUp 0.6s ease-out 0.2s both;
   }
 
   @keyframes fadeInUp {
@@ -1704,20 +1816,37 @@
     {/if}
   </div>
 
-  {#if showSuggestions && messages.length === 0}
-    <div class="suggestions-container">
-      <div class="suggestions-label">Things to reflect on:</div>
-      <div class="suggestions-grid">
-        {#each reflectionPrompts.slice(0, 4) as prompt}
-          <button
-            class="suggestion-chip"
-            on:click={() => useSuggestion(prompt)}
-            disabled={isLoading || isRewriting}
-          >
-            {prompt}
-          </button>
-        {/each}
+  {#if messages.length === 0}
+    <div class="welcome-container">
+      <div class="welcome-message">
+        <div class="welcome-icon">👋</div>
+        <h2 class="welcome-title">Welcome to MentorAI</h2>
+        <p class="welcome-description">
+          I'm here to help you think through decisions, examine assumptions, and gain clarity.
+          Choose a prompt below to get started, or share what's on your mind.
+        </p>
+        <div class="privacy-notice">
+          <strong>Privacy:</strong> Your conversations are stored locally in your browser only.
+          No account required. No data is sent to external servers except for generating responses via Google's Gemini API.
+          You can clear your data anytime using the "Clear" button.
+        </div>
       </div>
+      {#if showSuggestions}
+        <div class="suggestions-container">
+          <div class="suggestions-label">Get started with:</div>
+          <div class="suggestions-grid">
+            {#each reflectionPrompts.slice(0, 4) as prompt}
+              <button
+                class="suggestion-chip"
+                on:click={() => useSuggestion(prompt)}
+                disabled={isLoading || isRewriting}
+              >
+                {prompt}
+              </button>
+            {/each}
+          </div>
+        </div>
+      {/if}
     </div>
   {/if}
 
@@ -1866,25 +1995,12 @@
 {#if rewindAnimationActive}
   <div class="rewind-overlay" class:fade-out={!isRewriting && rewindAnimationActive}>
     <div class="rewind-content">
-      <div class="rewind-agent">
-        <div class="rewind-agent-name" class:active={!isRewriting}>
-          {rewindOldAgent || 'Previous Agent'}
-        </div>
+      <div class="rewind-transition-message">
+        {rewindOldAgentId && rewindNewAgentId ? getTransitionMessage(rewindOldAgentId, rewindNewAgentId) : 'Rewriting with a fresh perspective...'}
       </div>
-      <div class="rewind-arrow-container">
-        <!-- Arrow above text -->
-        <div class="rewind-arrow-wrapper">
-          <div class="rewind-arrow" class:rotated={isRewriting} style="transition-duration: {rewindLoadingDuration}ms;">←</div>
-        </div>
-        <!-- Text below arrow -->
-        <div class="rewind-transition-message">
-          {rewindOldAgentId && rewindNewAgentId ? getTransitionMessage(rewindOldAgentId, rewindNewAgentId) : 'Let\'s switch it up. A fresh perspective might help.'}
-        </div>
-      </div>
-      <div class="rewind-agent">
-        <div class="rewind-agent-name" class:active={isRewriting}>
-          {rewindNewAgent || 'New Agent'}
-        </div>
+      <!-- Simple loading bar only -->
+      <div class="rewind-loading-bar-container">
+        <div class="rewind-loading-bar" style="width: {rewindLoadingProgress}%;"></div>
       </div>
     </div>
   </div>

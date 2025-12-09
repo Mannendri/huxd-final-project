@@ -54,7 +54,13 @@ Your core objective is to foster trust through honesty and grounded dialogue.
 **Context:**
 - Sycophancy score: ${humane_metrics.sycophancy_score} (higher = we're agreeing too much)
 - Target response length: ${pacing_directives.target_length}
-- Primary objective this turn: ${request.objective}`;
+- Primary objective this turn: ${request.objective}
+
+**Response Length Guidelines:**
+- Match the user's message length. If they ask a short question, give a concise answer (2-3 sentences).
+- If they share a longer thought, you can respond with more depth (1-2 paragraphs max).
+- Avoid multiple paragraphs for simple queries. Be concise and focused.
+- Aim for 50-150 words for short queries, 150-300 words for longer discussions.`;
 
     // Add active listening guidance if enabled
     if (listening_directives?.use_active_listening) {

@@ -307,6 +307,12 @@ Create a single, coherent response that:
 4. Is ${plan.pacing_directives.target_length} in length
 5. ${plan.pacing_directives.encourage_pause ? 'Encourages the user to pause and reflect before continuing' : ''}
 
+**Response Length Guidelines:**
+- Match the user's message length. Short questions get concise answers (2-3 sentences, 50-150 words).
+- Longer thoughts can get more depth (1-2 paragraphs max, 150-300 words).
+- Avoid multiple paragraphs for simple queries. Be concise and focused.
+- If the user's message is brief, keep your response brief too.
+
 Output only the fused response text, no meta-commentary.`;
   }
 

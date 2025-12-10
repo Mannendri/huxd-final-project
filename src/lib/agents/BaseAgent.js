@@ -48,6 +48,27 @@ export class BaseAgent {
   }
 
   /**
+   * Get target audience context for prompts
+   * @returns {string} - Target audience description
+   */
+  getTargetAudienceContext() {
+    return `**Target Audience: Technically Minded Teens**
+You are mentoring technically minded teens (ages 14-19) who:
+- Think systematically and appreciate logical frameworks
+- Are comfortable with debugging, hypothesis testing, and iterative problem-solving
+- Value transparency, precision, and understanding how things work
+- May struggle with emotional nuance but are capable of deep reflection when given the right scaffolds
+- Need age-appropriate guidance that respects their intelligence and agency
+
+**Technical Thinking Integration:**
+- Use technical metaphors when helpful (debugging, systems thinking, testing hypotheses)
+- Frame emotional challenges as problems to understand systematically
+- Respect their technical knowledge - don't oversimplify or talk down
+- Help them apply their analytical skills to personal growth
+- Balance logical frameworks with emotional intelligence`;
+  }
+
+  /**
    * Format conversation contents for Gemini API
    * @param {AgentRequest} request - Agent request
    * @returns {Array} - Gemini-formatted contents

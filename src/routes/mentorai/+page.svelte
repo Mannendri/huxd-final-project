@@ -13,6 +13,7 @@
   let rewindModalOpen = false;
   let isRewriting = false;
   let rewindAnimationActive = false;
+  let aboutModalOpen = false;
   let rewindOldAgent = null; // Old agent name during rewind
   let rewindNewAgent = null; // New agent name during rewind
   let rewindOldAgentId = null; // Old agent ID for transition message
@@ -29,10 +30,36 @@
   let placeholderInterval = null; // Timer for rotating placeholder text
   let currentPlaceholderIndex = 0; // For rotating placeholder text
   let showSuggestions = true; // Show suggestions when no messages
+  let hasStartedChatting = false; // Track if user has clicked "Start Chatting"
+  let welcomeFadingOut = false; // Track if welcome is fading out
+  let transitionStyle = 'default'; // Transition style based on user response
   let loadingReflectionPrompt = ''; // Reflective prompt shown during loading
   let loadingReflectionIndex = 0; // Index for rotating reflection prompts
   let reflectionInterval = null; // Timer for rotating reflection prompts during loading
   let rewindProgressInterval = null; // Timer for rewind loading bar progress
+
+  // Analyze user message to determine transition style
+  function analyzeMessageForTransition(message) {
+    const lowerMessage = message.toLowerCase();
+    const messageLength = message.length;
+
+    // Determine transition style based on message characteristics
+    if (lowerMessage.includes('urgent') || lowerMessage.includes('asap') || lowerMessage.includes('quick')) {
+      return 'fast'; // Quick, snappy transition
+    } else if (lowerMessage.includes('slow') || lowerMessage.includes('careful') || lowerMessage.includes('thoughtful')) {
+      return 'slow'; // Slow, contemplative transition
+    } else if (lowerMessage.includes('?') && messageLength < 50) {
+      return 'gentle'; // Gentle fade for short questions
+    } else if (messageLength > 200) {
+      return 'deep'; // Deep, immersive transition for long messages
+    } else if (lowerMessage.includes('help') || lowerMessage.includes('struggling') || lowerMessage.includes('stuck')) {
+      return 'supportive'; // Supportive, warm transition
+    } else if (lowerMessage.includes('challenge') || lowerMessage.includes('push') || lowerMessage.includes('honest')) {
+      return 'bold'; // Bold, confident transition
+    } else {
+      return 'default'; // Default smooth transition
+    }
+  }
 
   // Reflection prompts for new users - statements to share, not questions to ask
   const reflectionPrompts = [
@@ -141,6 +168,7 @@
         // Hide suggestions if there are existing messages
         if (messages.length > 0) {
           showSuggestions = false;
+          hasStartedChatting = true;
         }
       } catch (e) {
         console.error('Failed to load saved state:', e);
@@ -155,9 +183,41 @@
     }, 4000);
   });
 
+  function startChatting() {
+    // Analyze any input text to determine transition style
+    if (input.trim()) {
+      transitionStyle = analyzeMessageForTransition(input.trim());
+    } else {
+      transitionStyle = 'default';
+    }
+
+    // Start fade-out animation
+    welcomeFadingOut = true;
+
+    // Adjust fade-out duration based on transition style
+    const fadeDuration = transitionStyle === 'fast' ? 800 :
+                        transitionStyle === 'slow' ? 2000 :
+                        transitionStyle === 'deep' ? 1800 : 1500;
+
+    // Wait for fade-out animation before actually hiding
+    setTimeout(() => {
+      hasStartedChatting = true;
+      showSuggestions = false;
+      welcomeFadingOut = false;
+    }, fadeDuration);
+  }
+
   async function send() {
     const content = input.trim();
     if (!content) return;
+
+    // If welcome page is still showing, don't send - user must click "Start Chatting" first
+    if (!hasStartedChatting) {
+      return; // Don't send while welcome page is visible
+    }
+
+    // Analyze message to determine transition style
+    transitionStyle = analyzeMessageForTransition(content);
 
     // Hide suggestions once conversation starts
     if (showSuggestions) {
@@ -286,8 +346,33 @@
           // Force reactivity update
           messages = messages;
 
+          // Determine typewriter speed based on transition style and message length
+          const messageLength = data.assistantMessage.length;
+          let typewriterSpeed = 15; // Default speed (ms per character)
+
+          if (transitionStyle === 'fast') {
+            typewriterSpeed = 8; // Fast typing for urgent messages
+          } else if (transitionStyle === 'slow') {
+            typewriterSpeed = 25; // Slow, contemplative typing
+          } else if (transitionStyle === 'deep') {
+            typewriterSpeed = 20; // Thoughtful pace for deep messages
+          } else if (transitionStyle === 'gentle') {
+            typewriterSpeed = 18; // Gentle pace for short questions
+          } else if (transitionStyle === 'supportive') {
+            typewriterSpeed = 16; // Warm, supportive pace
+          } else if (transitionStyle === 'bold') {
+            typewriterSpeed = 12; // Confident, bold pace
+          }
+
+          // Adjust speed based on message length (longer messages can be slightly faster)
+          if (messageLength > 300) {
+            typewriterSpeed = Math.max(10, typewriterSpeed - 3);
+          } else if (messageLength < 100) {
+            typewriterSpeed = typewriterSpeed + 5; // Slower for very short messages
+          }
+
           // Start typewriter effect immediately - this will populate the content
-          startRealTextTyping(placeholderIndex, data.assistantMessage, 15);
+          startRealTextTyping(placeholderIndex, data.assistantMessage, typewriterSpeed);
         } else {
           // Fallback: add new message with empty content for typewriter
           const newMessage = { role: 'assistant', content: '', agentId }; // Start empty
@@ -387,11 +472,38 @@
     conversationState = null;
     rewindModalOpen = false;
     showSuggestions = true; // Show suggestions again when cleared
+    hasStartedChatting = false; // Reset to show welcome page again
     localStorage.removeItem('mentorai_state');
   }
 
-  function useSuggestion(prompt) {
+  async function useSuggestion(prompt) {
     input = prompt;
+
+    // Analyze the prompt to determine transition style
+    transitionStyle = analyzeMessageForTransition(prompt);
+
+    // Start fade-out animation if welcome page is showing (clicking a chip is choosing how to start)
+    if (!hasStartedChatting && !welcomeFadingOut) {
+      welcomeFadingOut = true;
+
+      // Adjust fade-out duration based on transition style
+      const fadeDuration = transitionStyle === 'fast' ? 800 :
+                          transitionStyle === 'slow' ? 2000 :
+                          transitionStyle === 'deep' ? 1800 : 1500;
+
+      // Wait for fade-out to complete before auto-sending
+      await new Promise(resolve => setTimeout(resolve, fadeDuration));
+      hasStartedChatting = true;
+      showSuggestions = false;
+      welcomeFadingOut = false;
+
+      // Now that we've started chatting, send the suggestion
+      send();
+    } else if (hasStartedChatting) {
+      // If already started chatting, just send immediately
+      send();
+    }
+
     // Focus the input after a brief delay
     setTimeout(() => {
       const inputEl = document.querySelector('.frutiger-input');
@@ -413,6 +525,14 @@
 
   function closeRewindModal() {
     rewindModalOpen = false;
+  }
+
+  function openAboutModal() {
+    aboutModalOpen = true;
+  }
+
+  function closeAboutModal() {
+    aboutModalOpen = false;
   }
 
   async function rewriteWithAgent(selectedAgentId) {
@@ -559,7 +679,32 @@
 
           // Start typewriter effect for rewritten message (no blurry placeholder)
           setTimeout(() => {
-            startRealTextTyping(lastAssistantIndex, responseData.assistantMessage, 15);
+            // Determine typewriter speed for rewrite based on transition style
+            const rewriteMessageLength = responseData.assistantMessage.length;
+            let rewriteTypewriterSpeed = 15; // Default speed
+
+            if (transitionStyle === 'fast') {
+              rewriteTypewriterSpeed = 8;
+            } else if (transitionStyle === 'slow') {
+              rewriteTypewriterSpeed = 25;
+            } else if (transitionStyle === 'deep') {
+              rewriteTypewriterSpeed = 20;
+            } else if (transitionStyle === 'gentle') {
+              rewriteTypewriterSpeed = 18;
+            } else if (transitionStyle === 'supportive') {
+              rewriteTypewriterSpeed = 16;
+            } else if (transitionStyle === 'bold') {
+              rewriteTypewriterSpeed = 12;
+            }
+
+            // Adjust speed based on message length
+            if (rewriteMessageLength > 300) {
+              rewriteTypewriterSpeed = Math.max(10, rewriteTypewriterSpeed - 3);
+            } else if (rewriteMessageLength < 100) {
+              rewriteTypewriterSpeed = rewriteTypewriterSpeed + 5;
+            }
+
+            startRealTextTyping(lastAssistantIndex, responseData.assistantMessage, rewriteTypewriterSpeed);
           }, 100);
         } else {
           // Fallback: just add it with empty content for typewriter
@@ -823,46 +968,45 @@
 
 <style>
   :global(:root) {
-    /* Warm, Inviting Color Palette - Cream, Beige, Soft Pastels */
-    --warm-cream: #FEF9F3;
-    --soft-beige: #F5EDE0;
-    --warm-white: #FFFBF7;
-    --light-cream: #FAF6F0;
-    --warm-gray: #E8E0D5;
-    --soft-purple: #B8A9D9;
-    --warm-purple: #9B7ED8;
-    --soft-pink: #E8B8C8;
-    --warm-pink: #D99BA8;
-    --soft-coral: #F4C2A1;
-    --warm-coral: #E8A87C;
-    --text-dark: #3A3429;
-    --text-medium: #5A5245;
-    --text-light: #7A7265;
-    --muted: #9A9285;
-    --primary: #9B7ED8;
-    --primary-600: #7B5EB8;
-    --bg: linear-gradient(135deg, #FEF9F3 0%, #F5EDE0 25%, #FAF6F0 50%, #F5EDE0 75%, #FEF9F3 100%);
-    --card: rgba(255, 251, 247, 0.95);
-    --card-muted: rgba(255, 251, 247, 0.7);
-    --border: rgba(155, 126, 216, 0.3);
-    --text: #3A3429;
-    --shadow-soft: 0 8px 32px rgba(155, 126, 216, 0.15);
-    --shadow-medium: 0 12px 40px rgba(232, 184, 200, 0.2);
+    /* Warm Dark Red Color Palette - Deep, Inviting, Cozy */
+    --warm-dark-red: #2D1A1A;
+    --deep-red: #3D2525;
+    --warm-red: #4A2E2E;
+    --soft-red: #5A3A3A;
+    --warm-burgundy: #6B3F3F;
+    --accent-red: #C85A5A;
+    --warm-coral: #D97A7A;
+    --soft-coral: #E89A9A;
+    --warm-pink: #E8B8B8;
+    --text-light: #F5E5E5;
+    --text-medium: #E8D5D5;
+    --text-muted: #D5C5C5;
+    --muted: #C5B5B5;
+    --primary: #C85A5A;
+    --primary-600: #A84A4A;
+    --bg: linear-gradient(135deg, #2D1A1A 0%, #3D2525 25%, #4A2E2E 50%, #3D2525 75%, #2D1A1A 100%);
+    --card: rgba(45, 26, 26, 0.95);
+    --card-muted: rgba(45, 26, 26, 0.7);
+    --border: rgba(200, 90, 90, 0.3);
+    --text: #F5E5E5;
+    --shadow-soft: 0 8px 32px rgba(200, 90, 90, 0.2);
+    --shadow-medium: 0 12px 40px rgba(200, 90, 90, 0.3);
   }
 
   :global(html, body) {
-    height: 100%;
+    min-height: 100%;
     margin: 0;
     padding: 0;
     background:
-      radial-gradient(circle at 20% 30%, rgba(232, 184, 200, 0.15) 0%, transparent 50%),
-      radial-gradient(circle at 80% 70%, rgba(155, 126, 216, 0.2) 0%, transparent 50%),
-      radial-gradient(circle at 50% 50%, rgba(244, 194, 161, 0.1) 0%, transparent 70%),
-      linear-gradient(135deg, #FEF9F3 0%, #F5EDE0 25%, #FAF6F0 50%, #F5EDE0 75%, #FEF9F3 100%);
+      radial-gradient(circle at 20% 30%, rgba(200, 90, 90, 0.15) 0%, transparent 50%),
+      radial-gradient(circle at 80% 70%, rgba(217, 122, 122, 0.2) 0%, transparent 50%),
+      radial-gradient(circle at 50% 50%, rgba(232, 154, 154, 0.1) 0%, transparent 70%),
+      linear-gradient(135deg, #2D1A1A 0%, #3D2525 25%, #4A2E2E 50%, #3D2525 75%, #2D1A1A 100%);
     background-attachment: fixed;
     color: var(--text);
     font-family: 'Comfortaa', 'Segoe UI', sans-serif;
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
   }
 
   :global(*), :global(*::before), :global(*::after) { box-sizing: border-box; }
@@ -870,24 +1014,25 @@
   .container {
     max-width: 100%;
     width: 100%;
-    height: 100vh;
+    min-height: 100vh;
     margin: 0;
-    padding: 1.5rem;
+    padding: 1rem 1.5rem;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
   }
   h1 {
     color: var(--text);
     letter-spacing: 0.3px;
-    margin: 0 0 0.5rem 0;
+    margin: 0;
     font-weight: 600;
-    font-size: 1.75rem;
+    font-size: 1.9rem;
     text-shadow: 0 2px 8px rgba(135, 206, 235, 0.3);
   }
   .subtle {
     color: var(--muted);
-    font-size: 0.9rem;
+    font-size: 1rem;
     margin-bottom: 0.75rem;
     font-weight: 300;
   }
@@ -911,8 +1056,18 @@
     border: 2px solid var(--border);
     box-shadow: var(--shadow-soft);
     -webkit-overflow-scrolling: touch;
+    margin-top: 0;
     margin-bottom: 1rem;
     scroll-behavior: smooth;
+  }
+
+  .chat.no-border {
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border: none;
+    box-shadow: none;
+    padding: 0;
   }
   .flexcol { display: flex; flex-direction: column; gap: 0.75rem; }
   .bubble {
@@ -934,25 +1089,25 @@
   }
 
   .bubble.user {
-    background: linear-gradient(135deg, rgba(232, 184, 200, 0.4) 0%, rgba(217, 155, 168, 0.3) 100%);
-    border: 2px solid rgba(217, 155, 168, 0.5);
-    border-left: 5px solid var(--warm-pink);
+    background: linear-gradient(135deg, rgba(200, 90, 90, 0.3) 0%, rgba(217, 122, 122, 0.25) 100%);
+    border: 2px solid rgba(200, 90, 90, 0.5);
+    border-left: 5px solid var(--accent-red);
     margin-left: auto;
-    font-family: 'Comfortaa', sans-serif;
-    font-size: 1rem;
+    font-family: 'Comfortaa', 'Segoe UI', sans-serif;
+    font-size: 1.1rem;
     font-weight: 400;
-    color: var(--text-dark);
+    color: var(--text-light);
   }
 
   .bubble.assistant {
-    background: linear-gradient(135deg, rgba(255, 251, 247, 0.98) 0%, rgba(245, 237, 224, 0.95) 100%);
-    border: 2px solid rgba(155, 126, 216, 0.3);
+    background: linear-gradient(135deg, rgba(45, 26, 26, 0.95) 0%, rgba(90, 50, 50, 0.8) 100%);
+    border: 2px solid rgba(200, 90, 90, 0.4);
     margin-right: auto;
-    font-family: 'Caveat', 'Comfortaa', sans-serif;
-    font-size: 1.15rem;
-    font-weight: 500;
-    color: var(--text-dark);
-    box-shadow: 0 2px 12px rgba(155, 126, 216, 0.15);
+    font-family: 'Comfortaa', 'Segoe UI', sans-serif;
+    font-size: 1.2rem;
+    font-weight: 400;
+    color: var(--text-light);
+    box-shadow: 0 2px 12px rgba(200, 90, 90, 0.2);
   }
 
   /* Polaroid reveal effect */
@@ -1056,30 +1211,30 @@
   }
   .bubble:hover { outline: 2px solid transparent; box-shadow: 0 1px 0 rgba(2,6,23,0.04); }
 
-  /* Agent color coding - Warm, inviting style */
+  /* Agent color coding - Warm dark red style */
   .bubble.agent-trust {
-    border-left: 5px solid var(--warm-purple);
-    background: linear-gradient(135deg, rgba(255, 251, 247, 0.98) 0%, rgba(184, 169, 217, 0.2) 100%);
-    border-color: rgba(155, 126, 216, 0.4);
-    color: var(--text-dark);
+    border-left: 5px solid var(--accent-red);
+    background: linear-gradient(135deg, rgba(45, 26, 26, 0.95) 0%, rgba(200, 90, 90, 0.25) 100%);
+    border-color: rgba(200, 90, 90, 0.4);
+    color: var(--text-light);
   }
   .bubble.agent-challenge {
     border-left: 5px solid var(--warm-coral);
-    background: linear-gradient(135deg, rgba(255, 251, 247, 0.98) 0%, rgba(244, 194, 161, 0.25) 100%);
-    border-color: rgba(232, 168, 124, 0.4);
-    color: var(--text-dark);
+    background: linear-gradient(135deg, rgba(45, 26, 26, 0.95) 0%, rgba(217, 122, 122, 0.25) 100%);
+    border-color: rgba(217, 122, 122, 0.4);
+    color: var(--text-light);
   }
   .bubble.agent-reflection {
-    border-left: 5px solid var(--soft-purple);
-    background: linear-gradient(135deg, rgba(255, 251, 247, 0.98) 0%, rgba(184, 169, 217, 0.2) 100%);
-    border-color: rgba(184, 169, 217, 0.4);
-    color: var(--text-dark);
+    border-left: 5px solid var(--soft-coral);
+    background: linear-gradient(135deg, rgba(45, 26, 26, 0.95) 0%, rgba(232, 154, 154, 0.25) 100%);
+    border-color: rgba(232, 154, 154, 0.4);
+    color: var(--text-light);
   }
   .bubble.agent-transfer {
     border-left: 5px solid var(--warm-pink);
-    background: linear-gradient(135deg, rgba(255, 251, 247, 0.98) 0%, rgba(232, 184, 200, 0.2) 100%);
-    border-color: rgba(217, 155, 168, 0.4);
-    color: var(--text-dark);
+    background: linear-gradient(135deg, rgba(45, 26, 26, 0.95) 0%, rgba(232, 184, 184, 0.25) 100%);
+    border-color: rgba(232, 184, 184, 0.4);
+    color: var(--text-light);
   }
 
   /* Rewind animation */
@@ -1153,7 +1308,7 @@
 
   .rewind-loading-bar {
     height: 100%;
-    background: linear-gradient(90deg, var(--warm-purple), var(--warm-coral));
+    background: linear-gradient(90deg, var(--accent-red), var(--warm-coral));
     border-radius: 2px;
     transition: width 0.1s linear;
   }
@@ -1259,9 +1414,9 @@
       opacity: 0;
     }
   }
-  .meta { color: var(--muted); font-size: 0.8rem; margin-bottom: 0.15rem; }
+  .meta { color: var(--muted); font-size: 0.9rem; margin-bottom: 0.15rem; }
 
-  .toolbar { display: flex; gap: 1rem; align-items: center; justify-content: space-between; margin: 0 0 0.5rem 0; flex-shrink: 0; }
+  .toolbar { display: flex; gap: 1rem; align-items: center; justify-content: space-between; margin: 0.25rem 0 0 0; flex-shrink: 0; padding: 0; }
 
   .frutiger-input {
     flex: 1;
@@ -1273,15 +1428,15 @@
     -webkit-backdrop-filter: blur(10px);
     outline: none;
     transition: all 0.3s ease;
-    font-family: 'Comfortaa', sans-serif;
-    font-size: 1rem;
+    font-family: 'Comfortaa', 'Segoe UI', sans-serif;
+    font-size: 1.1rem;
     color: var(--text);
-    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.2);
+    box-shadow: 0 2px 8px rgba(200, 90, 90, 0.2);
   }
 
   .frutiger-input:focus {
     border-color: var(--primary);
-    box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.3), 0 4px 16px rgba(139, 92, 246, 0.3);
+    box-shadow: 0 0 0 4px rgba(200, 90, 90, 0.3), 0 4px 16px rgba(200, 90, 90, 0.3);
     transform: translateY(-1px);
   }
 
@@ -1294,14 +1449,14 @@
     padding: 0.9rem 1.8rem;
     border: 2px solid var(--primary);
     border-radius: 20px;
-    background: linear-gradient(135deg, var(--warm-purple) 0%, var(--primary-600) 100%);
+    background: linear-gradient(135deg, var(--accent-red) 0%, var(--primary-600) 100%);
     color: white;
     cursor: pointer;
     font-weight: 600;
-    font-family: 'Comfortaa', sans-serif;
-    font-size: 1rem;
+    font-family: 'Comfortaa', 'Segoe UI', sans-serif;
+    font-size: 1.1rem;
     line-height: 1.2;
-    box-shadow: 0 4px 16px rgba(155, 126, 216, 0.3);
+    box-shadow: 0 4px 16px rgba(200, 90, 90, 0.3);
     transition: all 0.3s ease;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -1315,10 +1470,10 @@
   }
 
   .send-button:hover:not(:disabled) {
-    background: linear-gradient(135deg, var(--primary-600) 0%, var(--warm-purple) 100%);
-    box-shadow: 0 6px 20px rgba(155, 126, 216, 0.4);
+    background: linear-gradient(135deg, var(--primary-600) 0%, var(--accent-red) 100%);
+    box-shadow: 0 6px 20px rgba(200, 90, 90, 0.4);
     transform: translateY(-2px) scale(1.02);
-    border-color: var(--soft-purple);
+    border-color: var(--warm-coral);
   }
 
   .send-button:active:not(:disabled) {
@@ -1334,14 +1489,14 @@
     padding: 0.9rem 1.8rem;
     border: 2px solid var(--warm-coral);
     border-radius: 20px;
-    background: linear-gradient(135deg, rgba(232, 168, 124, 0.9) 0%, rgba(244, 194, 161, 0.8) 100%);
-    color: var(--text-dark);
+    background: linear-gradient(135deg, rgba(217, 122, 122, 0.9) 0%, rgba(232, 154, 154, 0.8) 100%);
+    color: var(--text-light);
     cursor: pointer;
     font-weight: 600;
-    font-family: 'Comfortaa', sans-serif;
-    font-size: 1rem;
+    font-family: 'Comfortaa', 'Segoe UI', sans-serif;
+    font-size: 1.1rem;
     line-height: 1.2;
-    box-shadow: 0 4px 16px rgba(232, 168, 124, 0.3);
+    box-shadow: 0 4px 16px rgba(217, 122, 122, 0.3);
     transition: all 0.3s ease;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -1355,8 +1510,8 @@
   }
 
   .rewind-button:hover:not(:disabled) {
-    background: linear-gradient(135deg, rgba(244, 194, 161, 1) 0%, rgba(232, 168, 124, 0.95) 100%);
-    box-shadow: 0 6px 20px rgba(232, 168, 124, 0.4);
+    background: linear-gradient(135deg, rgba(232, 154, 154, 1) 0%, rgba(217, 122, 122, 0.95) 100%);
+    box-shadow: 0 6px 20px rgba(217, 122, 122, 0.4);
     transform: translateY(-2px) scale(1.02);
     border-color: var(--warm-coral);
   }
@@ -1380,14 +1535,15 @@
     color: var(--text);
     cursor: pointer;
     font-weight: 500;
-    font-family: 'Comfortaa', sans-serif;
-    box-shadow: 0 2px 8px rgba(135, 206, 235, 0.15);
+    font-family: 'Comfortaa', 'Segoe UI', sans-serif;
+    font-size: 1.05rem;
+    box-shadow: 0 2px 8px rgba(200, 90, 90, 0.15);
     transition: all 0.3s ease;
   }
 
   :global(button.secondary:hover) {
     background: var(--card-muted);
-    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+    box-shadow: 0 4px 12px rgba(200, 90, 90, 0.3);
     transform: translateY(-1px);
   }
 
@@ -1405,9 +1561,9 @@
   .debug-section:first-child { margin-top: 0; padding-top: 0; border-top: none; }
 
   .error {
-    background: linear-gradient(135deg, rgba(232, 184, 200, 0.4) 0%, rgba(217, 155, 168, 0.3) 100%);
-    color: var(--text-dark);
-    border: 2px solid var(--warm-pink);
+    background: linear-gradient(135deg, rgba(200, 90, 90, 0.4) 0%, rgba(217, 122, 122, 0.3) 100%);
+    color: var(--text-light);
+    border: 2px solid var(--accent-red);
     padding: 1rem 1.25rem;
     border-radius: 20px;
     margin: 0.5rem 0 0.75rem 0;
@@ -1425,7 +1581,7 @@
     animation: blink 1.4s infinite both;
     box-shadow: 0 2px 4px rgba(139, 92, 246, 0.3);
   }
-  .dot:nth-child(2) { animation-delay: .2s; background: var(--warm-purple); }
+  .dot:nth-child(2) { animation-delay: .2s; background: var(--accent-red); }
   .dot:nth-child(3) { animation-delay: .4s; background: var(--warm-coral); }
   @keyframes blink { 0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); } 40% { opacity: 1; transform: scale(1.1); } }
 
@@ -1453,8 +1609,100 @@
     padding: 2rem;
     max-width: 600px;
     width: 100%;
+    max-height: 90vh;
     box-shadow: var(--shadow-medium);
     border: 2px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .about-modal {
+    max-width: 700px;
+  }
+
+  .about-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+    margin-top: 1rem;
+    overflow-y: auto;
+    overflow-x: hidden;
+    flex: 1;
+    padding-right: 0.5rem;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .about-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .about-section-title {
+    font-family: 'Comfortaa', 'Segoe UI', sans-serif;
+    font-size: 1.6rem;
+    font-weight: 600;
+    color: var(--text-light);
+    margin: 0;
+  }
+
+  .about-section-text {
+    font-family: 'Comfortaa', 'Segoe UI', sans-serif;
+    font-size: 1.1rem;
+    color: var(--text-medium);
+    line-height: 1.7;
+    margin: 0;
+  }
+
+  .about-section-text strong {
+    color: var(--text-light);
+    font-weight: 600;
+  }
+
+  .agents-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+  }
+
+  .agent-item {
+    font-family: 'Comfortaa', 'Segoe UI', sans-serif;
+    font-size: 1.05rem;
+    color: var(--text-medium);
+    line-height: 1.7;
+    padding: 0.75rem 1rem;
+    background: rgba(200, 90, 90, 0.15);
+    border-left: 3px solid var(--accent-red);
+    border-radius: 8px;
+  }
+
+  .agent-item strong {
+    color: var(--text-light);
+    font-weight: 600;
+  }
+
+  .suggestion-chip {
+    padding: 0.85rem 1.15rem;
+    background: linear-gradient(135deg, rgba(200, 90, 90, 0.15) 0%, rgba(217, 122, 122, 0.1) 100%);
+    border: 2px solid rgba(200, 90, 90, 0.3);
+    border-radius: 16px;
+    color: var(--text-light);
+    font-family: 'Comfortaa', 'Segoe UI', sans-serif;
+    font-size: 1.05rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: left;
+    line-height: 1.6;
+    box-shadow: 0 2px 8px rgba(200, 90, 90, 0.15);
+  }
+
+  .suggestion-chip:hover:not(:disabled) {
+    background: linear-gradient(135deg, rgba(200, 90, 90, 0.25) 0%, rgba(217, 122, 122, 0.2) 100%);
+    border-color: var(--primary);
+    box-shadow: 0 4px 16px rgba(200, 90, 90, 0.3);
+    transform: translateY(-2px);
   }
 
   .modal-header {
@@ -1462,12 +1710,14 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: 1rem;
+    flex-shrink: 0;
   }
 
   .modal-title {
-    font-size: 1.25rem;
+    font-size: 1.5rem;
     font-weight: 600;
     color: var(--text);
+    font-family: 'Comfortaa', 'Segoe UI', sans-serif;
   }
 
   .modal-close {
@@ -1499,9 +1749,10 @@
   }
 
   .agent-info-label {
-    font-size: 0.85rem;
+    font-size: 0.95rem;
     color: var(--muted);
     margin-bottom: 0.25rem;
+    font-family: 'Comfortaa', 'Segoe UI', sans-serif;
   }
 
   .agent-info-value {
@@ -1562,29 +1813,83 @@
 
   .header-section {
     flex-shrink: 0;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0;
+    padding: 0;
+    margin-top: 0;
   }
 
   /* Welcome message for first-time users */
   .welcome-container {
-    margin-bottom: 1.5rem;
+    margin-top: 0.5rem;
+    margin-bottom: 1rem;
     flex-shrink: 0;
     animation: fadeInUp 0.5s ease-out;
+    transition: opacity 1s ease-out, transform 1s ease-out;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: flex-start;
+    min-height: 0;
+    width: 100%;
+    overflow: visible;
+    padding: 0;
+  }
+
+  .welcome-container.fade-out {
+    opacity: 0;
+    transform: translateY(-20px);
+    pointer-events: none;
+  }
+
+  /* Dynamic transition styles based on user response */
+  .welcome-container.fade-out.fast {
+    transition: opacity 0.8s ease-out, transform 0.8s ease-out;
+    transform: translateY(-10px) scale(0.98);
+  }
+
+  .welcome-container.fade-out.slow {
+    transition: opacity 2s ease-in-out, transform 2s ease-in-out;
+    transform: translateY(-30px);
+  }
+
+  .welcome-container.fade-out.gentle {
+    transition: opacity 1.2s ease-out, transform 1.2s ease-out;
+    transform: translateY(-15px);
+  }
+
+  .welcome-container.fade-out.deep {
+    transition: opacity 1.8s ease-in-out, transform 1.8s ease-in-out;
+    transform: translateY(-25px) scale(0.99);
+  }
+
+  .welcome-container.fade-out.supportive {
+    transition: opacity 1.5s ease-out, transform 1.5s ease-out;
+    transform: translateY(-18px);
+  }
+
+  .welcome-container.fade-out.bold {
+    transition: opacity 1s ease-out, transform 1s ease-out;
+    transform: translateY(-22px) scale(0.97);
   }
 
   .welcome-message {
     text-align: center;
-    padding: 2rem 1.5rem;
-    background: linear-gradient(135deg, rgba(255, 251, 247, 0.98) 0%, rgba(245, 237, 224, 0.95) 100%);
-    border: 2px solid rgba(155, 126, 216, 0.3);
+    padding: clamp(1rem, 3vh, 1.5rem) clamp(1rem, 2vw, 1.25rem);
+    background: linear-gradient(135deg, rgba(45, 26, 26, 0.95) 0%, rgba(90, 50, 50, 0.9) 100%);
+    border: 2px solid rgba(200, 90, 90, 0.3);
     border-radius: 24px;
-    box-shadow: 0 4px 20px rgba(155, 126, 216, 0.15);
-    margin-bottom: 1.5rem;
+    box-shadow: 0 4px 20px rgba(200, 90, 90, 0.2);
+    margin-bottom: clamp(0.75rem, 2vh, 1rem);
+    overflow: visible;
+    min-height: fit-content;
+    width: 100%;
+    align-self: flex-start;
+    flex-shrink: 0;
   }
 
   .welcome-icon {
-    font-size: 3rem;
-    margin-bottom: 0.75rem;
+    font-size: clamp(2rem, 5vw, 2.5rem);
+    margin-bottom: clamp(0.25rem, 1vh, 0.5rem);
     animation: wave 2s ease-in-out infinite;
   }
 
@@ -1595,33 +1900,36 @@
   }
 
   .welcome-title {
-    font-family: 'Caveat', 'Comfortaa', sans-serif;
-    font-size: 2rem;
+    font-family: 'Comfortaa', 'Segoe UI', sans-serif;
+    font-size: clamp(1.5rem, 4vw, 1.9rem);
     font-weight: 600;
-    color: var(--text-dark);
-    margin: 0 0 0.75rem 0;
+    color: var(--text-light);
+    margin: 0 0 0.5rem 0;
   }
 
   .welcome-description {
-    font-family: 'Comfortaa', sans-serif;
-    font-size: 1rem;
+    font-family: 'Comfortaa', 'Segoe UI', sans-serif;
+    font-size: clamp(0.9rem, 2.5vw, 1rem);
     color: var(--text-medium);
-    line-height: 1.6;
-    margin: 0 0 1.5rem 0;
+    line-height: 1.5;
+    margin: 0 0 clamp(0.75rem, 2vh, 1rem) 0;
     max-width: 600px;
     margin-left: auto;
     margin-right: auto;
+    overflow: visible;
+    word-wrap: break-word;
+    white-space: normal;
   }
 
   .privacy-notice {
-    font-family: 'Comfortaa', sans-serif;
-    font-size: 0.85rem;
-    color: var(--text-light);
+    font-family: 'Comfortaa', 'Segoe UI', sans-serif;
+    font-size: clamp(0.8rem, 2vw, 0.9rem);
+    color: var(--text-muted);
     line-height: 1.5;
-    margin-top: 1.5rem;
-    padding: 1rem;
-    background: rgba(155, 126, 216, 0.1);
-    border: 1px solid rgba(155, 126, 216, 0.2);
+    margin-top: clamp(0.75rem, 2vh, 1rem);
+    padding: clamp(0.5rem, 1.5vh, 0.75rem);
+    background: rgba(200, 90, 90, 0.15);
+    border: 1px solid rgba(200, 90, 90, 0.3);
     border-radius: 12px;
     max-width: 600px;
     margin-left: auto;
@@ -1629,20 +1937,61 @@
   }
 
   .privacy-notice strong {
-    color: var(--text-dark);
+    color: var(--text-light);
+  }
+
+  .start-chatting-container {
+    text-align: center;
+    margin-top: clamp(1.5rem, 4vh, 2rem);
+    margin-bottom: clamp(1rem, 3vh, 1.5rem);
+    animation: fadeInUp 0.6s ease-out 0.4s both;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .start-chatting-button {
+    padding: 1rem 2.5rem;
+    font-family: 'Comfortaa', 'Segoe UI', sans-serif;
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: white;
+    background: linear-gradient(135deg, var(--accent-red) 0%, var(--primary-600) 100%);
+    border: 2px solid var(--accent-red);
+    border-radius: 24px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 16px rgba(200, 90, 90, 0.3);
+    text-transform: none;
+    letter-spacing: 0.5px;
+  }
+
+  .start-chatting-button:hover {
+    background: linear-gradient(135deg, var(--primary-600) 0%, var(--accent-red) 100%);
+    box-shadow: 0 6px 24px rgba(200, 90, 90, 0.4);
+    transform: translateY(-2px) scale(1.02);
+  }
+
+  .start-chatting-button:active {
+    transform: translateY(0) scale(1);
   }
 
   .suggestions-container {
     margin-bottom: 1rem;
-    padding: 1.5rem;
-    background: var(--card);
+    margin-top: clamp(0.75rem, 2vh, 1rem);
+    padding: clamp(1rem, 3vh, 1.5rem);
+    background: linear-gradient(135deg, rgba(45, 26, 26, 0.95) 0%, rgba(90, 50, 50, 0.9) 100%);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     border: 2px solid var(--border);
     border-radius: 20px;
     box-shadow: var(--shadow-soft);
-    flex-shrink: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
     animation: fadeInUp 0.6s ease-out 0.2s both;
+    min-height: fit-content;
   }
 
   @keyframes fadeInUp {
@@ -1668,29 +2017,9 @@
   .suggestions-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 0.75rem;
-  }
-
-  .suggestion-chip {
-    padding: 0.75rem 1rem;
-    background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(107, 70, 193, 0.1) 100%);
-    border: 2px solid rgba(139, 92, 246, 0.3);
-    border-radius: 16px;
-    color: var(--text);
-    font-family: 'Comfortaa', sans-serif;
-    font-size: 0.9rem;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    text-align: left;
-    line-height: 1.4;
-    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.15);
-  }
-
-  .suggestion-chip:hover:not(:disabled) {
-    background: linear-gradient(135deg, rgba(139, 92, 246, 0.25) 0%, rgba(107, 70, 193, 0.2) 100%);
-    border-color: var(--primary);
-    box-shadow: 0 4px 16px rgba(139, 92, 246, 0.3);
-    transform: translateY(-2px);
+    gap: 1rem;
+    flex: 1;
+    align-content: start;
   }
 
   .suggestion-chip:active:not(:disabled) {
@@ -1706,13 +2035,13 @@
   .loading-reflection {
     margin: 1rem 0;
     padding: 1.25rem 1.5rem;
-    background: linear-gradient(135deg, rgba(255, 251, 247, 0.95) 0%, rgba(245, 237, 224, 0.9) 100%);
-    border: 2px solid rgba(155, 126, 216, 0.3);
+    background: linear-gradient(135deg, rgba(45, 26, 26, 0.95) 0%, rgba(90, 50, 50, 0.9) 100%);
+    border: 2px solid rgba(200, 90, 90, 0.3);
     border-radius: 20px;
     display: flex;
     align-items: center;
     gap: 1rem;
-    box-shadow: 0 4px 16px rgba(155, 126, 216, 0.15);
+    box-shadow: 0 4px 16px rgba(200, 90, 90, 0.2);
     animation: fadeInUp 0.4s ease-out;
     flex-shrink: 0;
   }
@@ -1724,11 +2053,11 @@
 
   .loading-reflection-text {
     flex: 1;
-    font-family: 'Caveat', 'Comfortaa', sans-serif;
-    font-size: 1.1rem;
-    color: var(--text-dark);
-    font-weight: 500;
-    line-height: 1.5;
+    font-family: 'Comfortaa', 'Segoe UI', sans-serif;
+    font-size: 1.15rem;
+    color: var(--text-light);
+    font-weight: 400;
+    line-height: 1.6;
     font-style: italic;
   }
 
@@ -1758,6 +2087,7 @@
   <div class="header-section">
     <h1>MentorAI</h1>
     <div class="toolbar">
+      <button class="secondary" on:click={openAboutModal}>About</button>
       <button class="secondary" on:click={clearConversation}>Clear</button>
     </div>
   </div>
@@ -1768,7 +2098,51 @@
     </div>
   {/if}
 
-  <div class="chat flexcol" bind:this={chatContainer}>
+  {#if messages.length === 0 && !hasStartedChatting}
+    <div class="welcome-container" class:fade-out={welcomeFadingOut} class:fast={transitionStyle === 'fast'} class:slow={transitionStyle === 'slow'} class:gentle={transitionStyle === 'gentle'} class:deep={transitionStyle === 'deep'} class:supportive={transitionStyle === 'supportive'} class:bold={transitionStyle === 'bold'}>
+      <div class="welcome-message">
+        <div class="welcome-icon">👋</div>
+        <h2 class="welcome-title">Welcome to MentorAI</h2>
+        <p class="welcome-description">
+          I'm here to help you think through decisions, examine assumptions, and gain clarity.
+          <strong>Designed for technically minded teens</strong> who think systematically but want to explore their inner world with nuance and depth.
+          Choose a prompt below to get started, or share what's on your mind.
+        </p>
+        <div class="privacy-notice">
+          <strong>Privacy:</strong> Your conversations are stored locally in your browser only.
+          No account required. No data is sent to external servers except for generating responses via Google's Gemini API.
+          You can clear your data anytime using the "Clear" button.
+        </div>
+      </div>
+      {#if showSuggestions}
+        <div class="suggestions-container">
+          <div class="suggestions-label">Get started with:</div>
+          <div class="suggestions-grid">
+            {#each reflectionPrompts.slice(0, 4) as prompt}
+              <button
+                class="suggestion-chip"
+                on:click={() => useSuggestion(prompt)}
+                disabled={isLoading || isRewriting || welcomeFadingOut}
+              >
+                {prompt}
+              </button>
+            {/each}
+          </div>
+        </div>
+      {/if}
+      <div class="start-chatting-container">
+        <button
+          class="start-chatting-button"
+          on:click={startChatting}
+          disabled={welcomeFadingOut}
+        >
+          Start Chatting
+        </button>
+      </div>
+    </div>
+  {/if}
+
+  <div class="chat flexcol" class:no-border={messages.length === 0 && !hasStartedChatting} bind:this={chatContainer}>
     {#each messages as m, i}
       {@const agentId = getAgentForMessage(i)}
       {@const agentClass = agentId ? `agent-${agentId.split('_')[0]}` : ''}
@@ -1816,40 +2190,6 @@
     {/if}
   </div>
 
-  {#if messages.length === 0}
-    <div class="welcome-container">
-      <div class="welcome-message">
-        <div class="welcome-icon">👋</div>
-        <h2 class="welcome-title">Welcome to MentorAI</h2>
-        <p class="welcome-description">
-          I'm here to help you think through decisions, examine assumptions, and gain clarity.
-          Choose a prompt below to get started, or share what's on your mind.
-        </p>
-        <div class="privacy-notice">
-          <strong>Privacy:</strong> Your conversations are stored locally in your browser only.
-          No account required. No data is sent to external servers except for generating responses via Google's Gemini API.
-          You can clear your data anytime using the "Clear" button.
-        </div>
-      </div>
-      {#if showSuggestions}
-        <div class="suggestions-container">
-          <div class="suggestions-label">Get started with:</div>
-          <div class="suggestions-grid">
-            {#each reflectionPrompts.slice(0, 4) as prompt}
-              <button
-                class="suggestion-chip"
-                on:click={() => useSuggestion(prompt)}
-                disabled={isLoading || isRewriting}
-              >
-                {prompt}
-              </button>
-            {/each}
-          </div>
-        </div>
-      {/if}
-    </div>
-  {/if}
-
   {#if isLoading && loadingReflectionPrompt}
     <div class="loading-reflection">
       <div class="loading-reflection-icon">💭</div>
@@ -1857,6 +2197,7 @@
     </div>
   {/if}
 
+  {#if hasStartedChatting}
   <div class="row input-row" style="margin-top: 0; flex-shrink: 0;">
     <input
       type="text"
@@ -1876,6 +2217,7 @@
     </button>
     <button class="send-button" on:click={send} disabled={isLoading || isRewriting}>→ Send</button>
   </div>
+  {/if}
 </div>
 
 {#if debugOpen && debugInfo}
@@ -2001,6 +2343,87 @@
       <!-- Simple loading bar only -->
       <div class="rewind-loading-bar-container">
         <div class="rewind-loading-bar" style="width: {rewindLoadingProgress}%;"></div>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if aboutModalOpen}
+  <div class="modal-overlay" on:click={closeAboutModal} on:keydown={(e) => e.key === 'Escape' && closeAboutModal()}>
+    <div class="modal about-modal" on:click|stopPropagation>
+      <div class="modal-header">
+        <div class="modal-title">About MentorAI</div>
+        <button class="modal-close" on:click={closeAboutModal}>×</button>
+      </div>
+
+      <div class="about-content">
+        <div class="about-section">
+          <h3 class="about-section-title">Who is this for?</h3>
+          <p class="about-section-text">
+            MentorAI is designed for <strong>technically minded teens (ages 14-19)</strong> who are seeking personal growth and emotional clarity.
+            If you're someone who thinks systematically, appreciates logical frameworks, and is comfortable with debugging and hypothesis testing,
+            but wants to explore your inner world with nuance and depth, this is for you.
+          </p>
+          <p class="about-section-text">
+            <strong>What makes this "technical"?</strong> We use technical thinking patterns throughout:
+            framing emotional challenges as problems to understand systematically, using debugging metaphors for self-reflection,
+            applying systems thinking to relationships and patterns, and treating personal growth as an iterative, testable process.
+          </p>
+          <p class="about-section-text">
+            <strong>What makes this "teen"?</strong> The tone respects your intelligence and agency without condescension.
+            We balance logical frameworks with emotional support, acknowledge your developing autonomy, and frame guidance
+            as collaborative problem-solving rather than top-down advice.
+          </p>
+        </div>
+
+        <div class="about-section">
+          <h3 class="about-section-title">The Rewind Feature</h3>
+          <p class="about-section-text">
+            One of our most unique features is the <strong>Rewind button</strong>. Sometimes a response doesn't quite land—maybe it's too direct,
+            or not challenging enough, or doesn't match what you need in that moment. The Rewind feature lets you explore alternative perspectives
+            from different agent personas, mirroring how real conversations work where one framing might not resonate and another might.
+          </p>
+          <p class="about-section-text">
+            This isn't just about getting a different answer—it's about understanding that there are multiple valid ways to approach any situation,
+            and finding the one that feels right for you.
+          </p>
+        </div>
+
+        <div class="about-section">
+          <h3 class="about-section-title">Four Agent Personas</h3>
+          <div class="agents-list">
+            <div class="agent-item">
+              <strong>Trust & Transparency</strong> — Honest, grounded dialogue with explicit limitations
+            </div>
+            <div class="agent-item">
+              <strong>Challenge & Pacing</strong> — Gentle pushback and productive friction
+            </div>
+            <div class="agent-item">
+              <strong>Reflection Coach</strong> — Reflective prompts and self-understanding
+            </div>
+            <div class="agent-item">
+              <strong>Transfer to World</strong> — Concrete actions and independence
+            </div>
+          </div>
+        </div>
+
+        <div class="about-section">
+          <h3 class="about-section-title">Our Design Philosophy</h3>
+          <p class="about-section-text">
+            Every feature in MentorAI is designed with <strong>humane intent</strong>. From boundary-respecting interactions to dynamic visuals
+            that respond to your needs, we've built this system to support genuine growth rather than create dependency. The system respects your
+            autonomy and encourages you to develop your own insights.
+          </p>
+        </div>
+
+        <div class="about-section">
+          <h3 class="about-section-title">Privacy & Transparency</h3>
+          <p class="about-section-text">
+            Your conversations are stored <strong>locally in your browser only</strong>. No account required. No data is sent to external servers
+            except for generating responses via Google's Gemini API. You can clear your data anytime using the "Clear" button.
+            We believe in transparency about how your data is handled.
+          </p>
+        </div>
       </div>
     </div>
   </div>

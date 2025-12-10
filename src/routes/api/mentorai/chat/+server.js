@@ -83,6 +83,17 @@ export async function POST({ request }) {
     });
   } catch (err) {
     const msg = String(err?.message || err || '').toLowerCase();
+    const errName = err?.name || '';
+    
+    // Handle quota exceeded errors
+    if (errName === 'QuotaExceededError' || msg.includes('quota exceeded') || msg.includes('429') || msg.includes('resource_exhausted')) {
+      return json({ 
+        error: 'Gemini API quota exceeded. You have reached the free tier limit (20 requests per day per model). Please wait or upgrade your plan at https://ai.google.dev/',
+        details: 'Quota limit: 20 requests per day for gemini-2.5-flash on the free tier.'
+      }, { status: 429 });
+    }
+    
+    // Handle missing API key errors
     if (msg.includes('gemini_api_key') || msg.includes('gemini') || msg.includes('api key') || msg.includes('not set')) {
       // Check if we're on Vercel
       const isVercel = env.VERCEL === '1' || env.VERCEL_ENV;
@@ -91,6 +102,7 @@ export async function POST({ request }) {
         : 'Gemini API key not found. Please set GEMINI_API_KEY in your .env file.';
       return json({ error: errorMsg }, { status: 500 });
     }
+    
     console.error('MentorAI pipeline error:', err);
     return json({
       error: 'Pipeline error',

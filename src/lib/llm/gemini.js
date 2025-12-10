@@ -45,7 +45,18 @@ export async function geminiGenerate({ contents, systemPrompt = '', config = {} 
     config: config
   };
 
-  const response = await ai.models.generateContent(request);
-  const text = typeof response?.text === 'string' ? response.text : '';
-  return { text, raw: response };
+  try {
+    const response = await ai.models.generateContent(request);
+    const text = typeof response?.text === 'string' ? response.text : '';
+    return { text, raw: response };
+  } catch (error) {
+    // Handle quota/rate limit errors
+    if (error?.message?.includes('429') || error?.message?.includes('quota') || error?.message?.includes('RESOURCE_EXHAUSTED')) {
+      const quotaError = new Error('Gemini API quota exceeded. You have reached the free tier limit (20 requests per day). Please wait or upgrade your plan.');
+      quotaError.name = 'QuotaExceededError';
+      throw quotaError;
+    }
+    // Re-throw other errors
+    throw error;
+  }
 }

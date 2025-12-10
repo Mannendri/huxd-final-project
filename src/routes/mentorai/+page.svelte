@@ -87,32 +87,6 @@
     "Preparing response with appropriate tone..."
   ];
 
-  // Optional insight scaffolds - analytical rather than therapeutic
-  const insightScaffolds = [
-    {
-      label: "Debugging Mode",
-      description: "Break down the problem into testable components",
-      icon: "🔍"
-    },
-    {
-      label: "Hypothesis Testing",
-      description: "Formulate and test assumptions systematically",
-      icon: "🧪"
-    },
-    {
-      label: "Systems Analysis",
-      description: "Examine relationships and dependencies",
-      icon: "⚙️"
-    },
-    {
-      label: "Edge Case Exploration",
-      description: "Consider boundary conditions and exceptions",
-      icon: "📊"
-    }
-  ];
-
-  let showInsightScaffolds = false;
-  let selectedScaffold = null;
 
   // Rotating placeholder text suggestions
   const placeholderSuggestions = [
@@ -295,8 +269,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           history: historyForAPI,
-          state: conversationState,
-          scaffold: selectedScaffold // Pass scaffold selection to backend
+          state: conversationState
         })
       });
 
@@ -1972,17 +1945,6 @@
     flex-shrink: 0;
   }
 
-  .welcome-icon {
-    font-size: clamp(2rem, 5vw, 2.5rem);
-    margin-bottom: clamp(0.25rem, 1vh, 0.5rem);
-    animation: wave 2s ease-in-out infinite;
-  }
-
-  @keyframes wave {
-    0%, 100% { transform: rotate(0deg); }
-    25% { transform: rotate(20deg); }
-    75% { transform: rotate(-20deg); }
-  }
 
   .welcome-title {
     font-family: 'Comfortaa', 'Segoe UI', sans-serif;
@@ -2186,7 +2148,6 @@
   {#if messages.length === 0 && !hasStartedChatting}
     <div class="welcome-container" class:fade-out={welcomeFadingOut} class:fast={transitionStyle === 'fast'} class:slow={transitionStyle === 'slow'} class:gentle={transitionStyle === 'gentle'} class:deep={transitionStyle === 'deep'} class:supportive={transitionStyle === 'supportive'} class:bold={transitionStyle === 'bold'}>
       <div class="welcome-message">
-        <div class="welcome-icon">👋</div>
         <h2 class="welcome-title">Welcome to MentorAI</h2>
         <p class="welcome-description">
           I'm here to help you think through decisions, examine assumptions, and gain clarity.
@@ -2273,34 +2234,6 @@
 
   {#if hasStartedChatting}
   <div class="row input-row" style="margin-top: 0; flex-shrink: 0;">
-    {#if showInsightScaffolds}
-      <div style="margin-bottom: 1rem; padding: 1rem; background: var(--bg-secondary); border-radius: 12px; border: 2px solid var(--border); width: 100%;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-          <div style="font-weight: 600; font-size: 0.95rem; color: var(--text-medium);">Reasoning Mode</div>
-          <button
-            class="secondary"
-            on:click={() => { showInsightScaffolds = false; selectedScaffold = null; }}
-            style="font-size: 0.8rem; padding: 0.3rem 0.6rem;"
-          >
-            Close
-          </button>
-        </div>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem;">
-          {#each insightScaffolds as scaffold}
-            <button
-              class="scaffold-button"
-              class:selected={selectedScaffold === scaffold.label}
-              on:click={() => selectedScaffold = selectedScaffold === scaffold.label ? null : scaffold.label}
-              style="padding: 0.75rem; border-radius: 8px; border: 2px solid var(--border); background: var(--card); text-align: left; cursor: pointer; transition: all 0.2s;"
-            >
-              <div style="font-size: 1.2rem; margin-bottom: 0.25rem;">{scaffold.icon}</div>
-              <div style="font-weight: 600; font-size: 0.9rem; margin-bottom: 0.25rem;">{scaffold.label}</div>
-              <div style="font-size: 0.8rem; opacity: 0.7;">{scaffold.description}</div>
-            </button>
-          {/each}
-        </div>
-      </div>
-    {/if}
     <input
       type="text"
       placeholder={placeholderSuggestions[currentPlaceholderIndex]}
@@ -2309,15 +2242,6 @@
       class="frutiger-input"
       disabled={isLoading || isRewriting}
     />
-    <button
-      class="secondary"
-      on:click={() => showInsightScaffolds = !showInsightScaffolds}
-      disabled={isLoading || isRewriting}
-      title="Toggle reasoning mode scaffolds"
-      style="font-size: 0.85rem; padding: 0.5rem 0.75rem;"
-    >
-      🔍 Mode
-    </button>
     <button
       class="rewind-button"
       on:click={openRewindModal}

@@ -62,7 +62,8 @@ Your core objective is to create productive friction through gentle pushback and
 - Match the user's message length. Short questions get concise answers (2-3 sentences).
 - Longer thoughts can get more depth (1-2 paragraphs max).
 - Avoid multiple paragraphs for simple queries. Be concise and focused.
-- Aim for 50-150 words for short queries, 150-300 words for longer discussions.`;
+- Aim for 50-150 words for short queries, 150-300 words for longer discussions.
+- **CRITICAL: If the user says they don't want to talk, want to stop, or are saying goodbye, keep your response VERY SHORT (1-2 sentences, max 50 words). Be respectful and brief. Don't give advice or long explanations.**`;
 
     // Add active listening guidance if enabled
     if (listening_directives?.use_active_listening) {

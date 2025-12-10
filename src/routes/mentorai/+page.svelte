@@ -37,6 +37,8 @@
   let loadingReflectionIndex = 0; // Index for rotating reflection prompts
   let reflectionInterval = null; // Timer for rotating reflection prompts during loading
   let rewindProgressInterval = null; // Timer for rewind loading bar progress
+  let showRewindFeedback = false; // Show optional feedback prompt in rewind modal
+  let rewindFeedbackText = ''; // User's feedback about what didn't land
 
   // Analyze user message to determine transition style
   function analyzeMessageForTransition(message) {
@@ -73,17 +75,44 @@
     "I hold a belief that might be limiting me..."
   ];
 
-  // Reflective prompts shown during loading to keep users engaged
-  const loadingReflectionPrompts = [
-    "While I think, what's one assumption you're making about this situation?",
-    "Take a moment: what would you tell a friend facing this?",
-    "What's the question behind your question?",
-    "What would change if you looked at this from a different angle?",
-    "What do you already know but haven't fully acknowledged?",
-    "If you were completely honest with yourself, what would you say?",
-    "What would you want to understand better if you had more clarity?",
-    "What's one thing you're avoiding thinking about here?"
+  // Technical system cues shown during loading - transparent about what's happening
+  const loadingSystemCues = [
+    "Evaluating logical structure...",
+    "Reviewing context and conversation history...",
+    "Analyzing patterns and dependencies...",
+    "Checking for edge cases...",
+    "Selecting appropriate reasoning mode...",
+    "Validating assumptions...",
+    "Mapping emotional state to technical frameworks...",
+    "Preparing response with appropriate tone..."
   ];
+
+  // Optional insight scaffolds - analytical rather than therapeutic
+  const insightScaffolds = [
+    {
+      label: "Debugging Mode",
+      description: "Break down the problem into testable components",
+      icon: "🔍"
+    },
+    {
+      label: "Hypothesis Testing",
+      description: "Formulate and test assumptions systematically",
+      icon: "🧪"
+    },
+    {
+      label: "Systems Analysis",
+      description: "Examine relationships and dependencies",
+      icon: "⚙️"
+    },
+    {
+      label: "Edge Case Exploration",
+      description: "Consider boundary conditions and exceptions",
+      icon: "📊"
+    }
+  ];
+
+  let showInsightScaffolds = false;
+  let selectedScaffold = null;
 
   // Rotating placeholder text suggestions
   const placeholderSuggestions = [
@@ -160,7 +189,8 @@
           // Find the last assistant message and map it
           for (let i = messages.length - 1; i >= 0; i--) {
             if (messages[i].role === 'assistant') {
-              messageAgentMap[i] = parsed.last_plan.selected_agents[0];
+              // Update agent map - force reactivity
+              messageAgentMap = { ...messageAgentMap, [i]: parsed.last_plan.selected_agents[0] };
               break;
             }
           }
@@ -233,25 +263,25 @@
     errorMsg = '';
     debugInfo = null;
 
-    // Start showing reflective prompts during loading
-    loadingReflectionIndex = Math.floor(Math.random() * loadingReflectionPrompts.length);
-    loadingReflectionPrompt = loadingReflectionPrompts[loadingReflectionIndex];
+    // Start showing technical system cues during loading
+    loadingReflectionIndex = Math.floor(Math.random() * loadingSystemCues.length);
+    loadingReflectionPrompt = loadingSystemCues[loadingReflectionIndex];
 
     // Clear any existing reflection interval
     if (reflectionInterval) {
       clearInterval(reflectionInterval);
     }
 
-    // Rotate reflection prompts every 3 seconds while loading
+    // Rotate system cues every 2 seconds while loading (faster for technical feel)
     reflectionInterval = setInterval(() => {
       if (isLoading) {
-        loadingReflectionIndex = (loadingReflectionIndex + 1) % loadingReflectionPrompts.length;
-        loadingReflectionPrompt = loadingReflectionPrompts[loadingReflectionIndex];
+        loadingReflectionIndex = (loadingReflectionIndex + 1) % loadingSystemCues.length;
+        loadingReflectionPrompt = loadingSystemCues[loadingReflectionIndex];
       } else {
         clearInterval(reflectionInterval);
         reflectionInterval = null;
       }
-    }, 3000);
+    }, 2000);
 
     try {
       // Send history without placeholder messages
@@ -265,7 +295,8 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           history: historyForAPI,
-          state: conversationState
+          state: conversationState,
+          scaffold: selectedScaffold // Pass scaffold selection to backend
         })
       });
 
@@ -341,7 +372,8 @@
             }
             return m;
           });
-          messageAgentMap[placeholderIndex] = agentId;
+          // Update agent map - force reactivity
+          messageAgentMap = { ...messageAgentMap, [placeholderIndex]: agentId };
 
           // Force reactivity update
           messages = messages;
@@ -378,7 +410,8 @@
           const newMessage = { role: 'assistant', content: '', agentId }; // Start empty
           messages = [...messages, newMessage];
           const messageIndex = messages.length - 1;
-          messageAgentMap[messageIndex] = agentId;
+          // Update agent map - force reactivity
+          messageAgentMap = { ...messageAgentMap, [messageIndex]: agentId };
           setTimeout(() => {
             startRealTextTyping(messageIndex, data.assistantMessage, 15);
           }, 100);
@@ -430,12 +463,14 @@
             if ((syncedMessages.length === messages.length || syncedMessages.length === messages.length - 1) && !isTypingLastMessage) {
               messages = syncedMessages;
 
-              // Update agent map for all assistant messages
+              // Update agent map for all assistant messages - force reactivity
+              const newAgentMap = { ...messageAgentMap };
               messages.forEach((m, idx) => {
                 if (m.role === 'assistant' && m.agentId) {
-                  messageAgentMap[idx] = m.agentId;
+                  newAgentMap[idx] = m.agentId;
                 }
               });
+              messageAgentMap = newAgentMap;
             }
           }
         }, 500);
@@ -521,10 +556,14 @@
       return;
     }
     rewindModalOpen = true;
+    showRewindFeedback = false; // Reset feedback prompt
+    rewindFeedbackText = ''; // Clear feedback text
   }
 
   function closeRewindModal() {
     rewindModalOpen = false;
+    showRewindFeedback = false;
+    rewindFeedbackText = '';
   }
 
   function openAboutModal() {
@@ -571,7 +610,7 @@
     // Fixed 2 second duration for smooth animation
     rewindLoadingDuration = 2000; // 2000ms = 2 seconds
     rewindLoadingStartTime = Date.now();
-    rewindAnimationActive = true;
+      rewindAnimationActive = true;
     isRewriting = true;
 
     // Animate loading bar progress
@@ -658,8 +697,8 @@
             agentId: selectedAgentId
           };
           newMessages[lastAssistantIndex] = newMessage;
-          // Update agent map
-          messageAgentMap[lastAssistantIndex] = selectedAgentId;
+          // Update agent map - force reactivity by creating new object
+          messageAgentMap = { ...messageAgentMap, [lastAssistantIndex]: selectedAgentId };
           messages = newMessages;
 
           // Clear any existing typing state to prevent conflicts
@@ -672,10 +711,10 @@
           debugInfo = responseData.debug || null;
           conversationState = responseData.state || null;
 
-          // Persist state
-          if (conversationState) {
-            localStorage.setItem('mentorai_state', JSON.stringify(conversationState));
-          }
+        // Persist state
+        if (conversationState) {
+          localStorage.setItem('mentorai_state', JSON.stringify(conversationState));
+        }
 
           // Start typewriter effect for rewritten message (no blurry placeholder)
           setTimeout(() => {
@@ -711,7 +750,8 @@
           const newMessage = { role: 'assistant', content: '', agentId: selectedAgentId };
           messages = [...messages, newMessage];
           const messageIndex = messages.length - 1;
-          messageAgentMap[messageIndex] = selectedAgentId;
+          // Update agent map - force reactivity
+          messageAgentMap = { ...messageAgentMap, [messageIndex]: selectedAgentId };
 
           debugInfo = responseData.debug || null;
           conversationState = responseData.state || null;
@@ -760,39 +800,58 @@
 
   function getMessageColor(agentId) {
     if (!agentId) return null;
-    return AGENTS[agentId]?.color || null;
+    // Ensure consistent color mapping
+    const agent = AGENTS[agentId];
+    if (!agent) return null;
+    return agent.color || null;
   }
 
-  // Get transition message for switching between agents
+  // Strip markdown formatting from text
+  function stripMarkdown(text) {
+    if (!text) return '';
+    return text
+      .replace(/\*\*(.*?)\*\*/g, '$1') // Bold
+      .replace(/\*(.*?)\*/g, '$1') // Italic
+      .replace(/_(.*?)_/g, '$1') // Underline
+      .replace(/`(.*?)`/g, '$1') // Inline code
+      .replace(/```[\s\S]*?```/g, '') // Code blocks
+      .replace(/\[(.*?)\]\(.*?\)/g, '$1') // Links
+      .replace(/^#{1,6}\s+(.*)$/gm, '$1') // Headers
+      .replace(/^\s*[-*+]\s+(.*)$/gm, '$1') // List items
+      .replace(/^\s*\d+\.\s+(.*)$/gm, '$1') // Numbered lists
+      .trim();
+  }
+
+  // Get transition message for switching between agents - positive framing
   function getTransitionMessage(oldAgentId, newAgentId) {
     const transitions = {
       'trust_transparency': {
-        'challenge_pacing': 'Let\'s switch it up. Challenge & Pacing would be better because Trust & Transparency might be too cautious.',
-        'reflection_coach': 'Let\'s switch it up. Reflection Coach would be better because Trust & Transparency might be too direct.',
-        'transfer_to_world': 'Let\'s switch it up. Transfer to World would be better because Trust & Transparency might be too theoretical.'
+        'challenge_pacing': 'Switching to Challenge & Pacing for a more direct, pushback-focused perspective.',
+        'reflection_coach': 'Switching to Reflection Coach for deeper self-exploration and introspection.',
+        'transfer_to_world': 'Switching to Transfer to World for concrete, actionable next steps.'
       },
       'challenge_pacing': {
-        'trust_transparency': 'Let\'s switch it up. Trust & Transparency would be better because Challenge & Pacing might be too pushy.',
-        'reflection_coach': 'Let\'s switch it up. Reflection Coach would be better because Challenge & Pacing might be too confrontational.',
-        'transfer_to_world': 'Let\'s switch it up. Transfer to World would be better because Challenge & Pacing might be too focused on friction.'
+        'trust_transparency': 'Switching to Trust & Transparency for honest, grounded dialogue with clear limitations.',
+        'reflection_coach': 'Switching to Reflection Coach for deeper self-exploration and introspection.',
+        'transfer_to_world': 'Switching to Transfer to World for concrete, actionable next steps.'
       },
       'reflection_coach': {
-        'trust_transparency': 'Let\'s switch it up. Trust & Transparency would be better because Reflection Coach might be too introspective.',
-        'challenge_pacing': 'Let\'s switch it up. Challenge & Pacing would be better because Reflection Coach might be too passive.',
-        'transfer_to_world': 'Let\'s switch it up. Transfer to World would be better because Reflection Coach might be too abstract.'
+        'trust_transparency': 'Switching to Trust & Transparency for honest, grounded dialogue with clear limitations.',
+        'challenge_pacing': 'Switching to Challenge & Pacing for a more direct, pushback-focused perspective.',
+        'transfer_to_world': 'Switching to Transfer to World for concrete, actionable next steps.'
       },
       'transfer_to_world': {
-        'trust_transparency': 'Let\'s switch it up. Trust & Transparency would be better because Transfer to World might be too action-focused.',
-        'challenge_pacing': 'Let\'s switch it up. Challenge & Pacing would be better because Transfer to World might be too solution-oriented.',
-        'reflection_coach': 'Let\'s switch it up. Reflection Coach would be better because Transfer to World might be too practical.'
+        'trust_transparency': 'Switching to Trust & Transparency for honest, grounded dialogue with clear limitations.',
+        'challenge_pacing': 'Switching to Challenge & Pacing for a more direct, pushback-focused perspective.',
+        'reflection_coach': 'Switching to Reflection Coach for deeper self-exploration and introspection.'
       }
     };
 
     if (!oldAgentId || !newAgentId) {
-      return 'Let\'s switch it up. A fresh perspective might help.';
+      return 'Switching to a fresh perspective.';
     }
 
-    return transitions[oldAgentId]?.[newAgentId] || 'Let\'s switch it up. A different approach might be what you need.';
+    return transitions[oldAgentId]?.[newAgentId] || 'Switching to a different approach.';
   }
 
   // Generate agent-specific placeholder text that cycles through stages
@@ -900,7 +959,7 @@
     }
 
     // Direct to real text (no placeholder)
-    startRealTextTyping(messageIndex, fullText, speed);
+          startRealTextTyping(messageIndex, fullText, speed);
   }
 
   // Type out the real text
@@ -1585,6 +1644,32 @@
   .dot:nth-child(3) { animation-delay: .4s; background: var(--warm-coral); }
   @keyframes blink { 0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); } 40% { opacity: 1; transform: scale(1.1); } }
 
+  /* Technical system cue styling */
+  .system-cue {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+    color: var(--text-medium);
+    font-size: 0.9rem;
+    font-family: 'Comfortaa', 'Segoe UI', monospace;
+  }
+
+  .system-cue-icon {
+    font-size: 1rem;
+    animation: spin 2s linear infinite;
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  .system-cue-text {
+    font-style: italic;
+    opacity: 0.85;
+  }
+
   .modal-overlay {
     position: fixed;
     top: 0;
@@ -2109,8 +2194,7 @@
           Choose a prompt below to get started, or share what's on your mind.
         </p>
         <div class="privacy-notice">
-          <strong>Privacy:</strong> Your conversations are stored locally in your browser only.
-          No account required. No data is sent to external servers except for generating responses via Google's Gemini API.
+          <strong>Privacy:</strong> No account required. No data is sent to external servers except for generating responses via Google's Gemini API.
           You can clear your data anytime using the "Clear" button.
         </div>
       </div>
@@ -2148,11 +2232,9 @@
       {@const agentClass = agentId ? `agent-${agentId.split('_')[0]}` : ''}
       {@const isRewinding = rewindAnimationActive && i === messages.length - 1 && m.role === 'assistant'}
       {@const isTyping = typingMessages[i] !== undefined && typingMessages[i] !== m.content}
-      {@const hasBlurryPlaceholder = placeholderMessages[i] !== undefined}
       {@const isAnimatedPlaceholder = m.isPlaceholder && typingMessages[i] && !placeholderMessages[i]}
       {@const displayText = typingMessages[i] !== undefined ? typingMessages[i] : m.content}
       {@const isRevealing = m.role === 'assistant' && (i === messages.length - 1 || isTyping)}
-      {@const isBlurry = hasBlurryPlaceholder && isTyping}
       <div
         class="bubble {m.role} {agentClass}"
         class:rewinding={isRewinding}
@@ -2171,34 +2253,54 @@
         <div
           class="typewriter-text"
           class:complete={!isTyping}
-          class:blurry={isBlurry}
           class:animated-placeholder={isAnimatedPlaceholder}
         >
-          {displayText}
+          {stripMarkdown(displayText)}
         </div>
       </div>
     {/each}
     {#if isLoading}
       <div class="bubble assistant">
         <div class="meta">assistant</div>
-        <div class="typing" aria-label="Assistant is thinking">
-          <span class="dot"></span>
-          <span class="dot"></span>
-          <span class="dot"></span>
+        <div class="system-cue" aria-label="System processing">
+          <span class="system-cue-icon">⚙️</span>
+          <span class="system-cue-text">{loadingReflectionPrompt}</span>
         </div>
       </div>
     {/if}
   </div>
 
-  {#if isLoading && loadingReflectionPrompt}
-    <div class="loading-reflection">
-      <div class="loading-reflection-icon">💭</div>
-      <div class="loading-reflection-text">{loadingReflectionPrompt}</div>
-    </div>
-  {/if}
 
   {#if hasStartedChatting}
   <div class="row input-row" style="margin-top: 0; flex-shrink: 0;">
+    {#if showInsightScaffolds}
+      <div style="margin-bottom: 1rem; padding: 1rem; background: var(--bg-secondary); border-radius: 12px; border: 2px solid var(--border); width: 100%;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+          <div style="font-weight: 600; font-size: 0.95rem; color: var(--text-medium);">Reasoning Mode</div>
+          <button
+            class="secondary"
+            on:click={() => { showInsightScaffolds = false; selectedScaffold = null; }}
+            style="font-size: 0.8rem; padding: 0.3rem 0.6rem;"
+          >
+            Close
+          </button>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem;">
+          {#each insightScaffolds as scaffold}
+            <button
+              class="scaffold-button"
+              class:selected={selectedScaffold === scaffold.label}
+              on:click={() => selectedScaffold = selectedScaffold === scaffold.label ? null : scaffold.label}
+              style="padding: 0.75rem; border-radius: 8px; border: 2px solid var(--border); background: var(--card); text-align: left; cursor: pointer; transition: all 0.2s;"
+            >
+              <div style="font-size: 1.2rem; margin-bottom: 0.25rem;">{scaffold.icon}</div>
+              <div style="font-weight: 600; font-size: 0.9rem; margin-bottom: 0.25rem;">{scaffold.label}</div>
+              <div style="font-size: 0.8rem; opacity: 0.7;">{scaffold.description}</div>
+            </button>
+          {/each}
+        </div>
+      </div>
+    {/if}
     <input
       type="text"
       placeholder={placeholderSuggestions[currentPlaceholderIndex]}
@@ -2207,6 +2309,15 @@
       class="frutiger-input"
       disabled={isLoading || isRewriting}
     />
+    <button
+      class="secondary"
+      on:click={() => showInsightScaffolds = !showInsightScaffolds}
+      disabled={isLoading || isRewriting}
+      title="Toggle reasoning mode scaffolds"
+      style="font-size: 0.85rem; padding: 0.5rem 0.75rem;"
+    >
+      🔍 Mode
+    </button>
     <button
       class="rewind-button"
       on:click={openRewindModal}
@@ -2296,6 +2407,72 @@
         Select a different agent to rewrite the last response:
       </div>
 
+      {#if !showRewindFeedback && !isRewriting}
+        <div style="margin-bottom: 1rem; text-align: center;">
+          <button
+            class="secondary"
+            on:click={() => showRewindFeedback = true}
+            style="font-size: 0.9rem; padding: 0.5rem 1rem;"
+          >
+            What didn't land? (Optional)
+          </button>
+        </div>
+      {/if}
+
+      {#if showRewindFeedback && !isRewriting}
+        <div style="margin-bottom: 1rem;">
+          <label style="display: block; margin-bottom: 0.75rem; color: var(--text-medium); font-size: 0.9rem; font-weight: 600;">
+            What didn't land? (Choose one or more)
+          </label>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.5rem; margin-bottom: 0.75rem;">
+            {#each [
+              { id: 'too_abstract', label: 'Too abstract', description: 'Need more concrete examples' },
+              { id: 'not_actionable', label: 'Not actionable', description: 'Missing clear next steps' },
+              { id: 'tone_mismatch', label: 'Tone mismatch', description: 'Wrong level of directness' },
+              { id: 'too_passive', label: 'Too passive', description: 'Need more challenge/pushback' },
+              { id: 'too_direct', label: 'Too direct', description: 'Need more reflection space' },
+              { id: 'missing_context', label: 'Missing context', description: 'Didn\'t address key points' }
+            ] as option}
+              <label
+                style="display: flex; align-items: center; padding: 0.6rem; border-radius: 8px; border: 2px solid var(--border); background: var(--card); cursor: pointer; transition: all 0.2s;"
+                class:selected={rewindFeedbackText.includes(option.id)}
+                on:click={() => {
+                  const current = rewindFeedbackText.split(',').map(f => f.trim()).filter(f => f);
+                  if (current.includes(option.id)) {
+                    rewindFeedbackText = current.filter(f => f !== option.id).join(', ');
+                  } else {
+                    rewindFeedbackText = [...current, option.id].join(', ');
+                  }
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={rewindFeedbackText.includes(option.id)}
+                  style="margin-right: 0.5rem; cursor: pointer;"
+                  on:change={() => {}}
+                />
+                <div>
+                  <div style="font-weight: 600; font-size: 0.9rem;">{option.label}</div>
+                  <div style="font-size: 0.75rem; opacity: 0.7; margin-top: 0.2rem;">{option.description}</div>
+                </div>
+              </label>
+            {/each}
+          </div>
+          <div style="margin-top: 0.75rem; padding: 0.75rem; background: var(--bg-secondary); border-radius: 8px; border-left: 3px solid var(--primary);">
+            <div style="font-size: 0.85rem; color: var(--text-medium);">
+              <strong>Note:</strong> Feedback helps improve responses, but we won't optimize for comfort over growth.
+            </div>
+          </div>
+          <button
+            class="secondary"
+            on:click={() => { showRewindFeedback = false; rewindFeedbackText = ''; }}
+            style="margin-top: 0.5rem; font-size: 0.85rem; padding: 0.4rem 0.8rem;"
+          >
+            Skip feedback
+          </button>
+        </div>
+      {/if}
+
       {#if isRewriting}
         <div style="text-align: center; padding: 2rem; color: var(--muted);">
           <div class="typing" style="justify-content: center; margin-bottom: 0.5rem;">
@@ -2341,9 +2518,9 @@
         {rewindOldAgentId && rewindNewAgentId ? getTransitionMessage(rewindOldAgentId, rewindNewAgentId) : 'Rewriting with a fresh perspective...'}
       </div>
       <!-- Simple loading bar only -->
-      <div class="rewind-loading-bar-container">
+    <div class="rewind-loading-bar-container">
         <div class="rewind-loading-bar" style="width: {rewindLoadingProgress}%;"></div>
-      </div>
+    </div>
     </div>
   </div>
 {/if}
@@ -2360,7 +2537,7 @@
         <div class="about-section">
           <h3 class="about-section-title">Who is this for?</h3>
           <p class="about-section-text">
-            MentorAI is designed for <strong>technically minded teens (ages 14-19)</strong> who are seeking personal growth and emotional clarity.
+            MentorAI is designed for <strong>technically minded teens</strong> who are seeking personal growth and emotional clarity.
             If you're someone who thinks systematically, appreciates logical frameworks, and is comfortable with debugging and hypothesis testing,
             but wants to explore your inner world with nuance and depth, this is for you.
           </p>
@@ -2387,20 +2564,20 @@
             This isn't just about getting a different answer—it's about understanding that there are multiple valid ways to approach any situation,
             and finding the one that feels right for you.
           </p>
-        </div>
+      </div>
 
         <div class="about-section">
           <h3 class="about-section-title">Four Agent Personas</h3>
           <div class="agents-list">
             <div class="agent-item">
               <strong>Trust & Transparency</strong> — Honest, grounded dialogue with explicit limitations
-            </div>
+        </div>
             <div class="agent-item">
               <strong>Challenge & Pacing</strong> — Gentle pushback and productive friction
-            </div>
+        </div>
             <div class="agent-item">
               <strong>Reflection Coach</strong> — Reflective prompts and self-understanding
-            </div>
+      </div>
             <div class="agent-item">
               <strong>Transfer to World</strong> — Concrete actions and independence
             </div>
@@ -2419,8 +2596,7 @@
         <div class="about-section">
           <h3 class="about-section-title">Privacy & Transparency</h3>
           <p class="about-section-text">
-            Your conversations are stored <strong>locally in your browser only</strong>. No account required. No data is sent to external servers
-            except for generating responses via Google's Gemini API. You can clear your data anytime using the "Clear" button.
+            No account required. No data is sent to external servers except for generating responses via Google's Gemini API. You can clear your data anytime using the "Clear" button.
             We believe in transparency about how your data is handled.
           </p>
         </div>

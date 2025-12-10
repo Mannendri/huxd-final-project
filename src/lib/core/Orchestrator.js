@@ -245,7 +245,13 @@ export class Orchestrator {
    * Build planning prompt for orchestrator
    */
   buildPlanningPrompt({ user_message, state, humane_metrics, agent_weight_adjustments, pacing_policy }) {
-    return `You are the Core Orchestrator in a multi-agent mentoring system designed for technically minded teens (ages 14-19).
+    // Detect disengagement signals
+    const lowerMessage = user_message.toLowerCase();
+    const isDisengaging = /\b(don'?t want|stop|end|finish|done|enough|no more|goodbye|bye|that's all|nothing else)\b/i.test(lowerMessage) ||
+                         lowerMessage.includes("don't want to talk") ||
+                         lowerMessage.includes("want to stop");
+
+    return `You are the Core Orchestrator in a multi-agent mentoring system designed for technically minded teens.
 
 **Target Audience Context:**
 - Users are technically minded teens who think systematically and appreciate logical frameworks
@@ -253,6 +259,8 @@ export class Orchestrator {
 - They value transparency, precision, and understanding how things work
 - They may struggle with emotional nuance but are capable of deep reflection when given technical scaffolds
 - They need age-appropriate guidance that respects their intelligence and agency
+
+${isDisengaging ? '**IMPORTANT: User is disengaging or wants to stop talking. Keep response VERY SHORT (1-2 sentences max). Be respectful and brief. No long advice or explanations.**' : ''}
 
 Your job is to decide which specialized agents should respond to the user right now and set the tone/objective, considering their technical mindset and teen context.
 
@@ -299,11 +307,18 @@ Return JSON with selected_agents (array of agent IDs), primary_objective, tone_d
    * Build fusion prompt for combining agent responses
    */
   buildFusionPrompt(agentResponses, plan) {
+    // Check if user message indicates disengagement (access from first agent response's request)
+    const userMessage = agentResponses[0]?.request?.user_message || '';
+    const lowerMessage = userMessage.toLowerCase();
+    const isDisengaging = /\b(don'?t want|stop|end|finish|done|enough|no more|goodbye|bye|that's all|nothing else)\b/i.test(lowerMessage) ||
+                         lowerMessage.includes("don't want to talk") ||
+                         lowerMessage.includes("want to stop");
+
     return `You are fusing multiple agent responses into a single, unified reply.
 
-**Primary Objective:** ${plan.primary_objective}
+${isDisengaging ? '**CRITICAL: User wants to disengage or stop talking. Keep response VERY SHORT (1-2 sentences, max 50 words). Be respectful, brief, and don\'t give advice. Just acknowledge gracefully.**\n\n' : ''}**Primary Objective:** ${plan.primary_objective}
 **Tone:** Warmth ${plan.tone_directives.warmth}, Intellectual ${plan.tone_directives.intellectual}, Grounded ${plan.tone_directives.grounded}
-**Target Length:** ${plan.pacing_directives.target_length}
+**Target Length:** ${isDisengaging ? 'very short (1-2 sentences)' : plan.pacing_directives.target_length}
 
 **Agent Responses to Fuse:**
 You will receive responses from ${agentResponses.length} specialized agents. Each brings a different perspective:
@@ -317,11 +332,11 @@ Create a single, coherent response that:
 1. Integrates insights from all agent responses naturally
 2. Maintains the primary objective and tone
 3. Feels like one unified voice, not multiple voices
-4. Is ${plan.pacing_directives.target_length} in length
-5. ${plan.pacing_directives.encourage_pause ? 'Encourages the user to pause and reflect before continuing' : ''}
+4. Is ${isDisengaging ? 'very short (1-2 sentences max)' : plan.pacing_directives.target_length + ' in length'}
+5. ${plan.pacing_directives.encourage_pause && !isDisengaging ? 'Encourages the user to pause and reflect before continuing' : ''}
 
 **Response Length Guidelines:**
-- Match the user's message length. Short questions get concise answers (2-3 sentences, 50-150 words).
+${isDisengaging ? '- User wants to stop: Keep it VERY SHORT (1-2 sentences, max 50 words). Be brief and respectful.\n' : ''}- Match the user's message length. Short questions get concise answers (2-3 sentences, 50-150 words).
 - Longer thoughts can get more depth (1-2 paragraphs max, 150-300 words).
 - Avoid multiple paragraphs for simple queries. Be concise and focused.
 - If the user's message is brief, keep your response brief too.

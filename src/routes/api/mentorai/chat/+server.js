@@ -17,6 +17,12 @@ import { createInitialState } from '$lib/core/state.js';
  * Returns: JSON response with assistant message and debug info
  */
 export async function POST({ request }) {
+  // Debug: Check if API key is available (only log in development)
+  if (!env.GEMINI_API_KEY) {
+    console.error('[API] GEMINI_API_KEY not found in environment');
+    console.error('[API] Available env vars:', Object.keys(env).filter(k => k.includes('GEMINI') || k.includes('VERCEL')));
+  }
+
   const body = await request.json();
   const { history, state: clientState } = body || {};
 

@@ -876,6 +876,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    position: relative;
   }
   h1 {
     color: var(--text);
@@ -896,6 +897,7 @@
 
   .input-row {
     gap: 0.5rem;
+    flex-shrink: 0;
   }
 
   .chat {
@@ -913,6 +915,7 @@
     -webkit-overflow-scrolling: touch;
     margin-bottom: 1rem;
     scroll-behavior: smooth;
+    flex-shrink: 1;
   }
   .flexcol { display: flex; flex-direction: column; gap: 0.75rem; }
   .bubble {
@@ -1567,24 +1570,26 @@
 
   /* Welcome message for first-time users */
   .welcome-container {
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem;
     flex-shrink: 0;
     animation: fadeInUp 0.5s ease-out;
+    max-height: 60vh;
+    overflow-y: auto;
   }
 
   .welcome-message {
     text-align: center;
-    padding: 2rem 1.5rem;
+    padding: 1.5rem 1.25rem;
     background: linear-gradient(135deg, rgba(255, 251, 247, 0.98) 0%, rgba(245, 237, 224, 0.95) 100%);
     border: 2px solid rgba(155, 126, 216, 0.3);
     border-radius: 24px;
     box-shadow: 0 4px 20px rgba(155, 126, 216, 0.15);
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem;
   }
 
   .welcome-icon {
-    font-size: 3rem;
-    margin-bottom: 0.75rem;
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
     animation: wave 2s ease-in-out infinite;
   }
 
@@ -1596,18 +1601,18 @@
 
   .welcome-title {
     font-family: 'Caveat', 'Comfortaa', sans-serif;
-    font-size: 2rem;
+    font-size: 1.5rem;
     font-weight: 600;
     color: var(--text-dark);
-    margin: 0 0 0.75rem 0;
+    margin: 0 0 0.5rem 0;
   }
 
   .welcome-description {
     font-family: 'Comfortaa', sans-serif;
-    font-size: 1rem;
+    font-size: 0.9rem;
     color: var(--text-medium);
-    line-height: 1.6;
-    margin: 0 0 1.5rem 0;
+    line-height: 1.5;
+    margin: 0 0 1rem 0;
     max-width: 600px;
     margin-left: auto;
     margin-right: auto;
@@ -1615,11 +1620,11 @@
 
   .privacy-notice {
     font-family: 'Comfortaa', sans-serif;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     color: var(--text-light);
-    line-height: 1.5;
-    margin-top: 1.5rem;
-    padding: 1rem;
+    line-height: 1.4;
+    margin-top: 1rem;
+    padding: 0.75rem;
     background: rgba(155, 126, 216, 0.1);
     border: 1px solid rgba(155, 126, 216, 0.2);
     border-radius: 12px;
@@ -1634,7 +1639,7 @@
 
   .suggestions-container {
     margin-bottom: 1rem;
-    padding: 1.5rem;
+    padding: 1rem;
     background: var(--card);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
@@ -1857,7 +1862,7 @@
     </div>
   {/if}
 
-  <div class="row input-row" style="margin-top: 0; flex-shrink: 0;">
+  <div class="row input-row">
     <input
       type="text"
       placeholder={placeholderSuggestions[currentPlaceholderIndex]}

@@ -17,12 +17,6 @@ import { createInitialState } from '$lib/core/state.js';
  * Returns: JSON response with assistant message and debug info
  */
 export async function POST({ request }) {
-  // Debug: Check if API key is available (only log in development)
-  if (!env.GEMINI_API_KEY) {
-    console.error('[API] GEMINI_API_KEY not found in environment');
-    console.error('[API] Available env vars:', Object.keys(env).filter(k => k.includes('GEMINI') || k.includes('VERCEL')));
-  }
-
   const body = await request.json();
   const { history, state: clientState } = body || {};
 
@@ -89,12 +83,13 @@ export async function POST({ request }) {
     });
   } catch (err) {
     const msg = String(err?.message || err || '').toLowerCase();
-    if (msg.includes('gemini_api_key') || msg.includes('gemini') || msg.includes('api key')) {
-      const isVercel = env.VERCEL === '1';
+    if (msg.includes('gemini_api_key') || msg.includes('gemini') || msg.includes('api key') || msg.includes('not set')) {
+      // Check if we're on Vercel
+      const isVercel = env.VERCEL === '1' || env.VERCEL_ENV;
       const errorMsg = isVercel
-        ? 'Gemini API key not found. Please set GEMINI_API_KEY in Vercel Environment Variables (Project Settings → Environment Variables).'
+        ? 'Gemini API key not found. Please set GEMINI_API_KEY in Vercel Environment Variables (Project Settings → Environment Variables) and redeploy.'
         : 'Gemini API key not found. Please set GEMINI_API_KEY in your .env file.';
-      return json({ error: errorMsg }, { status: 400 });
+      return json({ error: errorMsg }, { status: 500 });
     }
     console.error('MentorAI pipeline error:', err);
     return json({

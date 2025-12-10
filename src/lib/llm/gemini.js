@@ -26,13 +26,10 @@ export function hasGemini(overrideKey) {
 export async function geminiGenerate({ contents, systemPrompt = '', config = {} }) {
   const key = env.GEMINI_API_KEY;
   if (!key) {
-    // Enhanced error message with debugging info
-    const isVercel = env.VERCEL === '1';
-    const availableKeys = Object.keys(env).filter(k => k.includes('GEMINI') || k.includes('VERCEL')).join(', ');
-    const errorMsg = isVercel
-      ? `GEMINI_API_KEY not set in Vercel environment. Available keys: ${availableKeys || 'none'}. Make sure to redeploy after adding environment variables.`
-      : `GEMINI_API_KEY not set. Available keys: ${availableKeys || 'none'}`;
-    throw new Error(errorMsg);
+    // Log available environment variables for debugging (only in server logs)
+    const availableKeys = Object.keys(env).filter(k => k.includes('GEMINI') || k.includes('VERCEL') || k.includes('ENV')).slice(0, 10);
+    console.error('[Gemini] GEMINI_API_KEY not found. Available env vars:', availableKeys);
+    throw new Error('GEMINI_API_KEY not set');
   }
 
   const ai = new GoogleGenAI({ apiKey: key });

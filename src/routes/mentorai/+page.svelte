@@ -863,6 +863,8 @@
     color: var(--text);
     font-family: 'Comfortaa', 'Segoe UI', sans-serif;
     overflow: hidden;
+    /* Improve touch experience on mobile */
+    -webkit-tap-highlight-color: transparent;
   }
 
   :global(*), :global(*::before), :global(*::after) { box-sizing: border-box; }
@@ -871,8 +873,13 @@
     max-width: 100%;
     width: 100%;
     height: 100vh;
+    height: 100dvh; /* Dynamic viewport height for mobile browsers */
     margin: 0;
     padding: 1.5rem;
+    padding-top: max(1.5rem, env(safe-area-inset-top));
+    padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
+    padding-left: max(1.5rem, env(safe-area-inset-left));
+    padding-right: max(1.5rem, env(safe-area-inset-right));
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -1124,6 +1131,8 @@
     justify-content: center;
     pointer-events: none;
     animation: rewindFadeIn 0.3s ease-out forwards;
+    padding-top: max(1rem, env(safe-area-inset-top));
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
   }
 
 
@@ -1280,6 +1289,9 @@
     font-size: 1rem;
     color: var(--text);
     box-shadow: 0 2px 8px rgba(139, 92, 246, 0.2);
+    -webkit-appearance: none; /* Remove iOS default styling */
+    appearance: none;
+    touch-action: manipulation; /* Improve touch responsiveness */
   }
 
   .frutiger-input:focus {
@@ -1310,11 +1322,14 @@
     letter-spacing: 0.5px;
     white-space: nowrap;
     min-width: 140px;
+    min-height: 44px; /* Minimum touch target */
     height: 48px;
     box-sizing: border-box;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    touch-action: manipulation; /* Improve touch responsiveness */
+    -webkit-tap-highlight-color: transparent; /* Remove tap highlight on mobile */
   }
 
   .send-button:hover:not(:disabled) {
@@ -1350,11 +1365,14 @@
     letter-spacing: 0.5px;
     white-space: nowrap;
     min-width: 140px;
+    min-height: 44px; /* Minimum touch target */
     height: 48px;
     box-sizing: border-box;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    touch-action: manipulation; /* Improve touch responsiveness */
+    -webkit-tap-highlight-color: transparent; /* Remove tap highlight on mobile */
   }
 
   .rewind-button:hover:not(:disabled) {
@@ -1386,6 +1404,9 @@
     font-family: 'Comfortaa', sans-serif;
     box-shadow: 0 2px 8px rgba(135, 206, 235, 0.15);
     transition: all 0.3s ease;
+    min-height: 44px; /* Minimum touch target */
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
   }
 
   :global(button.secondary:hover) {
@@ -1446,6 +1467,10 @@
     justify-content: center;
     z-index: 1000;
     padding: 1rem;
+    padding-top: max(1rem, env(safe-area-inset-top));
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .modal {
@@ -1529,6 +1554,9 @@
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     box-shadow: 0 2px 8px rgba(135, 206, 235, 0.15);
+    min-height: 44px; /* Minimum touch target */
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
   }
 
   .agent-card:hover {
@@ -1689,6 +1717,9 @@
     text-align: left;
     line-height: 1.4;
     box-shadow: 0 2px 8px rgba(139, 92, 246, 0.15);
+    min-height: 44px; /* Minimum touch target */
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
   }
 
   .suggestion-chip:hover:not(:disabled) {
@@ -1742,19 +1773,275 @@
     50% { opacity: 1; transform: scale(1.1); }
   }
 
-  @media (max-width: 640px) {
-    .bubble { max-width: 92%; }
-    .toolbar { gap: 0.5rem; }
-    .container { padding: 0.75rem; }
+  /* Mobile-first responsive design */
+  @media (max-width: 480px) {
+    /* Small phones */
+    .container {
+      padding: 0.5rem;
+      padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+      height: 100vh;
+      height: 100dvh; /* Dynamic viewport height for mobile browsers */
+    }
+
+    h1 {
+      font-size: 1.25rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .toolbar {
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .chat {
+      padding: 1rem;
+      border-radius: 16px;
+      margin-bottom: 0.75rem;
+    }
+
+    .bubble {
+      max-width: 92%;
+      padding: 0.75rem 1rem;
+      font-size: 0.95rem;
+      border-radius: 16px;
+    }
+
+    .bubble.assistant {
+      font-size: 1rem;
+    }
+
+    .input-row {
+      flex-direction: column;
+      gap: 0.5rem;
+      padding: 0.5rem 0;
+    }
+
+    .frutiger-input {
+      width: 100%;
+      padding: 0.875rem 1rem;
+      font-size: 16px; /* Prevents zoom on iOS */
+      border-radius: 16px;
+    }
+
+    .send-button,
+    .rewind-button {
+      width: 100%;
+      min-width: auto;
+      padding: 0.875rem 1.5rem;
+      font-size: 0.9rem;
+      height: 44px; /* Minimum touch target size */
+    }
+
+    .welcome-container {
+      margin-bottom: 1rem;
+      max-height: 50vh;
+    }
+
+    .welcome-message {
+      padding: 1rem;
+      border-radius: 16px;
+    }
+
+    .welcome-icon {
+      font-size: 1.5rem;
+    }
+
+    .welcome-title {
+      font-size: 1.25rem;
+    }
+
+    .welcome-description {
+      font-size: 0.85rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .privacy-notice {
+      font-size: 0.75rem;
+      padding: 0.625rem;
+      margin-top: 0.75rem;
+    }
+
+    .suggestions-container {
+      padding: 0.75rem;
+      border-radius: 16px;
+    }
+
+    .suggestions-grid {
+      grid-template-columns: 1fr;
+      gap: 0.5rem;
+    }
+
+    .suggestion-chip {
+      padding: 0.875rem 1rem;
+      font-size: 0.85rem;
+      border-radius: 12px;
+      min-height: 44px; /* Touch-friendly */
+    }
+
     .agent-grid {
       grid-template-columns: 1fr;
+      gap: 0.5rem;
     }
+
+    .agent-card {
+      padding: 1rem;
+      border-radius: 16px;
+    }
+
+    .modal {
+      max-width: 95%;
+      padding: 1.5rem;
+      border-radius: 20px;
+      margin: 1rem;
+    }
+
+    .modal-title {
+      font-size: 1.1rem;
+    }
+
+    .loading-reflection {
+      padding: 1rem;
+      border-radius: 16px;
+      margin: 0.75rem 0;
+    }
+
+    .loading-reflection-text {
+      font-size: 1rem;
+    }
+  }
+
+  @media (min-width: 481px) and (max-width: 768px) {
+    /* Large phones and small tablets */
+    .container {
+      padding: 1rem;
+      padding-bottom: max(1rem, env(safe-area-inset-bottom));
+    }
+
+    h1 {
+      font-size: 1.5rem;
+    }
+
+    .chat {
+      padding: 1.25rem;
+      border-radius: 20px;
+    }
+
+    .bubble {
+      max-width: 85%;
+      padding: 0.875rem 1.125rem;
+    }
+
+    .input-row {
+      gap: 0.5rem;
+    }
+
+    .send-button,
+    .rewind-button {
+      min-width: 120px;
+      padding: 0.875rem 1.5rem;
+      font-size: 0.95rem;
+    }
+
+    .suggestions-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .agent-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .modal {
+      max-width: 90%;
+      padding: 1.75rem;
+    }
+  }
+
+  @media (max-width: 640px) {
+    /* General mobile adjustments */
+    .bubble {
+      max-width: 92%;
+    }
+
+    .toolbar {
+      gap: 0.5rem;
+    }
+
     .suggestions-grid {
       grid-template-columns: 1fr;
     }
-    h1 { font-size: 1.25rem; }
-    .suggestions-container {
-      padding: 0.75rem;
+
+    .agent-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (min-width: 769px) and (max-width: 1024px) {
+    /* Tablets */
+    .container {
+      padding: 1.25rem;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .suggestions-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .agent-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  /* Touch device optimizations */
+  @media (hover: none) and (pointer: coarse) {
+    /* Touch devices */
+    .send-button,
+    .rewind-button,
+    .suggestion-chip,
+    .agent-card,
+    :global(button.secondary) {
+      min-height: 44px; /* Minimum touch target */
+    }
+
+    .send-button:hover:not(:disabled),
+    .rewind-button:hover:not(:disabled) {
+      transform: none; /* Disable hover transforms on touch */
+    }
+
+    .bubble {
+      padding: 1rem 1.25rem; /* Slightly larger for easier reading */
+    }
+  }
+
+  /* Landscape mobile adjustments */
+  @media (max-width: 896px) and (orientation: landscape) {
+    .welcome-container {
+      max-height: 40vh;
+    }
+
+    .welcome-message {
+      padding: 1rem 1.25rem;
+    }
+
+    .welcome-icon {
+      font-size: 1.5rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .welcome-title {
+      font-size: 1.25rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .welcome-description {
+      font-size: 0.85rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .privacy-notice {
+      font-size: 0.75rem;
+      padding: 0.5rem;
+      margin-top: 0.5rem;
     }
   }
 </style>

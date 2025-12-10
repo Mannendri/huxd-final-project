@@ -6,6 +6,7 @@
  */
 
 import { json } from '@sveltejs/kit';
+import { env } from '$env/dynamic/private';
 import { handleUserTurn } from '$lib/core/handleTurn.js';
 import { createInitialState } from '$lib/core/state.js';
 
@@ -83,7 +84,11 @@ export async function POST({ request }) {
   } catch (err) {
     const msg = String(err?.message || err || '').toLowerCase();
     if (msg.includes('gemini_api_key') || msg.includes('gemini') || msg.includes('api key')) {
-      return json({ error: 'Gemini API key not found. Please set GEMINI_API_KEY in your .env file.' }, { status: 400 });
+      const isVercel = env.VERCEL === '1';
+      const errorMsg = isVercel
+        ? 'Gemini API key not found. Please set GEMINI_API_KEY in Vercel Environment Variables (Project Settings → Environment Variables).'
+        : 'Gemini API key not found. Please set GEMINI_API_KEY in your .env file.';
+      return json({ error: errorMsg }, { status: 400 });
     }
     console.error('MentorAI pipeline error:', err);
     return json({

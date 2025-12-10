@@ -143,11 +143,15 @@ Each agent has a `getSystemPrompt()` method that generates the system prompt bas
 
 1. Create a Vercel account and import your GitHub repo
 2. In Vercel Project Settings → Environment Variables, add:
-   - `GEMINI_API_KEY`
-   - `GEMINI_MODEL` (e.g., `gemini-2.5-flash`)
-3. Deploy
+   - `GEMINI_API_KEY` (required) - Your Google Gemini API key from [Google AI Studio](https://aistudio.google.com/)
+   - `GEMINI_MODEL` (optional) - Defaults to `gemini-2.5-flash` if not set
+3. Deploy - Vercel will automatically detect the SvelteKit adapter and deploy
 
-**Important**: Never commit `.env` or API keys to Git. Use Vercel Environment Variables only.
+**Important**:
+- Never commit `.env` or API keys to Git. Use Vercel Environment Variables only.
+- The app uses `$env/dynamic/private` which automatically reads from Vercel's environment variables
+- Make sure to set environment variables for all environments (Production, Preview, Development) if needed
+- After adding environment variables, trigger a new deployment for changes to take effect
 
 ## Debug Mode
 

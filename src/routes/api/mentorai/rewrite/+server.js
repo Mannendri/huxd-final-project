@@ -5,6 +5,7 @@
  */
 
 import { json } from '@sveltejs/kit';
+import { env } from '$env/dynamic/private';
 import { rewriteLastResponse } from '$lib/core/handleTurn.js';
 import { AGENT_IDS } from '$lib/core/types.js';
 
@@ -75,6 +76,14 @@ export async function POST({ request }) {
       state: turnResult.new_state // Return updated state for client to persist
     });
   } catch (err) {
+    const msg = String(err?.message || err || '').toLowerCase();
+    if (msg.includes('gemini_api_key') || msg.includes('gemini') || msg.includes('api key')) {
+      const isVercel = env.VERCEL === '1';
+      const errorMsg = isVercel
+        ? 'Gemini API key not found. Please set GEMINI_API_KEY in Vercel Environment Variables (Project Settings → Environment Variables).'
+        : 'Gemini API key not found. Please set GEMINI_API_KEY in your .env file.';
+      return json({ error: errorMsg }, { status: 400 });
+    }
     console.error('MentorAI rewrite error:', err);
     return json({
       error: 'Rewrite error',

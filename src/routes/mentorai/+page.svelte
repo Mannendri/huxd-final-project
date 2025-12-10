@@ -2060,53 +2060,55 @@
     </div>
   {/if}
 
-  <div class="chat flexcol" bind:this={chatContainer}>
-    {#each messages as m, i}
-      {@const agentId = getAgentForMessage(i)}
-      {@const agentClass = agentId ? `agent-${agentId.split('_')[0]}` : ''}
-      {@const isRewinding = rewindAnimationActive && i === messages.length - 1 && m.role === 'assistant'}
-      {@const isTyping = typingMessages[i] !== undefined && typingMessages[i] !== m.content}
-      {@const hasBlurryPlaceholder = placeholderMessages[i] !== undefined}
-      {@const isAnimatedPlaceholder = m.isPlaceholder && typingMessages[i] && !placeholderMessages[i]}
-      {@const displayText = typingMessages[i] !== undefined ? typingMessages[i] : m.content}
-      {@const isRevealing = m.role === 'assistant' && (i === messages.length - 1 || isTyping)}
-      {@const isBlurry = hasBlurryPlaceholder && isTyping}
-      <div
-        class="bubble {m.role} {agentClass}"
-        class:rewinding={isRewinding}
-        class:revealing={isRevealing && !isRewinding}
-        class:active-placeholder={m.isPlaceholder}
-        style={agentId && getMessageColor(agentId) ? `border-left-color: ${getMessageColor(agentId)};` : ''}
-      >
-        <div class="meta">
-          {m.role}
-          {#if agentId && AGENTS[agentId]}
-            <span style="margin-left: 0.5rem; font-size: 0.7rem; opacity: 0.7;">
-              ({AGENTS[agentId].name})
-            </span>
-          {/if}
-        </div>
+  {#if messages.length > 0 || isLoading}
+    <div class="chat flexcol" bind:this={chatContainer}>
+      {#each messages as m, i}
+        {@const agentId = getAgentForMessage(i)}
+        {@const agentClass = agentId ? `agent-${agentId.split('_')[0]}` : ''}
+        {@const isRewinding = rewindAnimationActive && i === messages.length - 1 && m.role === 'assistant'}
+        {@const isTyping = typingMessages[i] !== undefined && typingMessages[i] !== m.content}
+        {@const hasBlurryPlaceholder = placeholderMessages[i] !== undefined}
+        {@const isAnimatedPlaceholder = m.isPlaceholder && typingMessages[i] && !placeholderMessages[i]}
+        {@const displayText = typingMessages[i] !== undefined ? typingMessages[i] : m.content}
+        {@const isRevealing = m.role === 'assistant' && (i === messages.length - 1 || isTyping)}
+        {@const isBlurry = hasBlurryPlaceholder && isTyping}
         <div
-          class="typewriter-text"
-          class:complete={!isTyping}
-          class:blurry={isBlurry}
-          class:animated-placeholder={isAnimatedPlaceholder}
+          class="bubble {m.role} {agentClass}"
+          class:rewinding={isRewinding}
+          class:revealing={isRevealing && !isRewinding}
+          class:active-placeholder={m.isPlaceholder}
+          style={agentId && getMessageColor(agentId) ? `border-left-color: ${getMessageColor(agentId)};` : ''}
         >
-          {displayText}
+          <div class="meta">
+            {m.role}
+            {#if agentId && AGENTS[agentId]}
+              <span style="margin-left: 0.5rem; font-size: 0.7rem; opacity: 0.7;">
+                ({AGENTS[agentId].name})
+              </span>
+            {/if}
+          </div>
+          <div
+            class="typewriter-text"
+            class:complete={!isTyping}
+            class:blurry={isBlurry}
+            class:animated-placeholder={isAnimatedPlaceholder}
+          >
+            {displayText}
+          </div>
         </div>
-      </div>
-    {/each}
-    {#if isLoading}
-      <div class="bubble assistant">
-        <div class="meta">assistant</div>
-        <div class="typing" aria-label="Assistant is thinking">
-          <span class="dot"></span>
-          <span class="dot"></span>
-          <span class="dot"></span>
+      {/each}
+      {#if isLoading}
+        <div class="bubble assistant">
+          <div class="meta">assistant</div>
+          <div class="typing" aria-label="Assistant is thinking">
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
+          </div>
         </div>
-      </div>
-    {/if}
-  </div>
+      {/if}
+    </div>
+  {/if}
 
   {#if messages.length === 0}
     <div class="welcome-container">
